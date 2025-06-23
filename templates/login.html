@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>ログイン</title>
+</head>
+<body>
+    <h2>管理者ログイン</h2>
+    <form method="post" action="{{ url_for('admin_login') }}">
+     <label>パスワード:</label>
+     <input type="password" name="password">
+     <button type="submit">ログイン</button>
+    </form>
+
+    {% with messages = get_flashed_messages() %}
+     {% if messages %}
+       <ul>
+         {% for message in messages %}
+           <li>{{ message }}</li>
+         {% endfor %}
+       </ul>
+      {% endif %}
+   {% endwith %}
+
+</body>
+</html>

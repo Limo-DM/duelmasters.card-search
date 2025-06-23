@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>管理者ダッシュボード</title>
+</head>
+<body>
+    <h1>管理者ダッシュボード</h1>
+
+    <!-- 🔍 検索バー -->
+    <form method="get" action="/admin" style="margin-bottom: 20px;">
+     <input type="text" name="query" placeholder="カード名・種族・文明で検索" value="{{ search_query }}" style="width: 300px;">
+     <button type="submit">検索</button>
+    </form>
+
+    <br>
+    <a href="{{ url_for('upload_file') }}">＋ 新規カードを登録</a>
+
+
+    <h2>カード一覧</h2>
+    <table border="1" cellpadding="5">
+        <tr>
+            <th>ID</th>
+            <th>名前（日本語）</th>
+            <th>名前（英語）</th>
+            <th>操作</th>
+        </tr>
+        {% for card in cards %}
+        <tr>
+            <td>{{ card.id }}</td>
+            <td>{{ card.name_ja }}</td>
+            <td>{{ card.name_en }}</td>
+            <td>
+                <a href="{{ url_for('edit_card', id=card.id) }}">編集</a>
+
+                <form action="{{ url_for('admin_delete', id=card.id) }}" method="post" onsubmit="return confirm('本当に削除しますか？');">
+                   <button type="submit">削除</button>
+                </form>
+
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <ul>
+        {% for message in messages %}
+          <li>{{ message }}</li>
+        {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+  <a href="{{ url_for('search') }}">
+    <button>カード一覧ページを開く</button>
+  </a>
+
+
+</body>
+</html>

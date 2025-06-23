@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>カード編集</title>
+    <style>
+        img {
+            max-width: 200px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+    <h1>カード情報を編集</h1>
+
+    <form action="{{ url_for('edit_card', id=card.id) }}" method="post" enctype="multipart/form-data">
+        <label>現在の画像:</label><br>
+        <img src="{{ card.image_url }}" alt="カード画像"><br><br>
+
+        {% if card.image_url2 %}
+         <p>現在の画像2:</p>
+         <img src="{{ card.image_url2 }}" alt="現在の画像2" style="max-width: 200px; border: 1px solid #ccc; margin-bottom: 10px;">
+        {% endif %}
+
+
+        <label>新しい画像をアップロード（任意）:</label>
+        <input type="file" name="file"><br><br>
+
+        <label>画像2（再アップロード・任意）:</label>
+        <input type="file" name="file2"><br>
+
+
+        <label>名前（日本語）:</label>
+        <input type="text" name="name_ja" value="{{ card.name_ja }}"><br>
+
+        <label>名前（読み）:</label>
+        <input type="text" name="name_ja_kana" value="{{ card.name_ja_kana }}"><br>
+
+        <label>名前（英語）:</label>
+        <input type="text" name="name_en" value="{{ card.name_en }}"><br>
+
+        <label>カードタイプ:</label>
+        <input type="text" name="card_type" value="{{ card.card_type }}"><br>
+
+        <label>文明:</label>
+        <input type="text" name="civilization" value="{{ card.civilization }}"><br>
+
+        <label>コスト:</label>
+        <input type="number" name="cost" value="{{ card.cost }}"><br>
+
+        <label>テキスト（日本語）:</label><br>
+        <textarea name="text_ja" rows="3" cols="50">{{ card.text_ja }}</textarea><br>
+
+        <label>テキスト（英語）:</label><br>
+        <textarea name="text_en" rows="3" cols="50">{{ card.text_en }}</textarea><br>
+
+        <label>パワー:</label>
+        <input type="text" name="power" value="{{ card.power }}"><br>
+
+        <label>種族:</label>
+        <input type="text" name="tribe" value="{{ card.tribe }}"><br>
+
+        <label>イラストレーター:</label><br>
+        <textarea name="illustrator" rows="2" cols="50">{{ card.illustrator if card else '' }}</textarea><br>
+
+        <label>収録セット:</label><br>
+        <textarea name="set_name" rows="2" cols="50">{{ card.set_name if card else '' }}</textarea><br><br>
+
+
+        <label>備考：</label><br>
+        <textarea name="note">{{ card.note if card else '' }}</textarea><br>
+
+
+        <h3>ツインインパクトカード情報（任意）</h3>
+
+        <label>名前（日本語）:</label>
+        <input type="text" name="twin_name_ja" value="{{ card.twin_name_ja }}"><br>
+
+        <label>名前（読み）:</label>
+        <input type="text" name="twin_name_ja_kana" value="{{ card.twin_name_ja_kana }}"><br>
+
+        <label>名前（英語）:</label>
+        <input type="text" name="twin_name_en" value="{{ card.twin_name_en }}"><br>
+
+        <label>カードタイプ:</label>
+        <input type="text" name="twin_card_type" value="{{ card.twin_card_type }}"><br>
+
+        <label>文明:</label>
+        <input type="text" name="twin_civilization" value="{{ card.twin_civilization }}"><br>
+
+        <label>コスト:</label>
+        <input type="number" name="twin_cost" value="{{ card.twin_cost }}"><br>
+
+        <label>テキスト（日本語）:</label><br>
+        <textarea name="twin_text_ja" rows="3" cols="50">{{ card.twin_text_ja }}</textarea><br>
+
+        <label>テキスト（英語）:</label><br>
+        <textarea name="twin_text_en" rows="3" cols="50">{{ card.twin_text_en }}</textarea><br>
+
+        <label>パワー:</label>
+        <input type="text" name="twin_power" value="{{ card.twin_power }}"><br>
+
+        <label>種族:</label>
+        <input type="text" name="twin_tribe" value="{{ card.twin_tribe }}"><br>
+
+
+        <button type="submit">保存する</button>
+    </form>
+
+    <br>
+    <a href="{{ url_for('index') }}">← 一覧に戻る</a>
+</body>
+</html>

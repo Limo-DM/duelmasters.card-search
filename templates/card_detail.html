@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>{{ card.name_ja }} - カード詳細</title>
+    <style>
+       body {
+          font-family: Arial, sans-serif;
+          margin: 20px;
+          line-height: 1.6;
+        }
+
+        .card-section {
+           max-width: 1000px;
+           margin: 0 auto;
+           padding: 10px;
+        }
+
+        .card-main {
+           display: flex;
+           gap: 20px;
+           align-items: flex-start;
+           flex-wrap: wrap;
+        }
+
+        .card-image {
+          flex: 1 1 400px;
+          max-width: 400px;
+        }
+
+        .card-image img {
+          width: 100%;
+          border: 1px solid #ccc;
+          margin-bottom: 10px;
+        }
+
+        .card-info {
+          flex: 2 1 400px;
+        }
+
+        .section-block {
+          background-color: #f9f9f9;
+          padding: 15px;
+          margin-bottom: 15px;
+          border-radius: 8px;
+          box-shadow: 0 0 5px rgba(0,0,0,0.1);
+        }
+
+        .section-block strong {
+          display: inline-block;
+          width: 150px;
+          font-weight: bold;
+          vertical-align: top;
+        }
+
+        .long-text {
+          border: 1px solid #ddd;
+          background: #fff;
+          padding: 10px;
+          margin-top: 5px;
+          border-radius: 4px;
+          white-space: pre-wrap;
+        }
+
+        .note-text {
+          color: red;
+          font-weight: bold;
+        }
+
+        h1 {
+          text-align: center;
+          margin-bottom: 20px;
+          font-size: 1.8em;
+        }
+
+        h3 {
+          margin-top: 25px;
+          border-bottom: 1px solid #ccc;
+          padding-bottom: 5px;
+        }
+
+    /* 🌟 スマホ用調整 */
+        @media (max-width: 600px) {
+           .card-main {
+               flex-direction: column;
+               align-items: center;
+            }
+
+           .card-image, .card-info {
+               max-width: 100%;
+               flex: none;
+            }
+
+           .section-block strong {
+               display: block;
+               width: 100%;
+               margin-bottom: 5px;
+            }
+
+           .long-text {
+              font-size: 0.9em;
+            }
+
+           h1 {
+              font-size: 1.4em;
+            }
+        }
+</style>
+
+</head>
+<body>
+<div class="card-section">
+    <h1>{{ card.name_ja }} / {{ card.name_en }}</h1>
+
+    <div class="card-main">
+        <div class="card-image">
+            <img src="{{ card.image_url }}" alt="{{ card.name_ja }}">
+            {% if card.image_url2 %}
+                <img src="{{ card.image_url2 }}" alt="{{ card.name_ja }}（2枚目）">
+            {% endif %}
+        </div>
+
+        <div class="card-info">
+            <div class="section-block">
+                <p><strong>Japanese（読み）:</strong> {{ card.name_ja_kana }}</p>
+                <p><strong>Card Type:</strong> {{ card.card_type }}</p>
+                <p><strong>Civilization:</strong> {{ card.civilization }}</p>
+                <p><strong>Cost:</strong> {{ card.cost }}</p>
+                <p><strong>Power:</strong> {{ card.power }}</p>
+                <p><strong>Race:</strong> {{ card.tribe }}</p>
+            </div>
+
+            <div class="section-block">
+                <strong>Japanese Text:</strong>
+                <div class="long-text">{{ card.text_ja }}</div>
+            </div>
+
+            <div class="section-block">
+                <strong>English Text:</strong>
+                <div class="long-text">{{ card.text_en }}</div>
+            </div>
+
+            <div class="section-block">
+                <p><strong>Illustrator:</strong> {{ card.illustrator }}</p>
+                <strong>Set and Rarity:</strong>
+                <div class="long-text">{{ card.set_name }}</div>
+            </div>
+
+            {% if card.note %}
+            <div class="section-block note-text">
+                {{ card.note }}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if card.twin_name_ja %}
+    <h3>▼ The other</h3>
+    <div class="section-block">
+        <p><strong>Japanese:</strong> {{ card.twin_name_ja }}</p>
+        <p><strong>Japanese（読み）:</strong> {{ card.twin_name_ja_kana }}</p>
+        <p><strong>English:</strong> {{ card.twin_name_en }}</p>
+        <p><strong>Card Type:</strong> {{ card.twin_card_type }}</p>
+        <p><strong>Civilization:</strong> {{ card.twin_civilization }}</p>
+        <p><strong>Cost:</strong> {{ card.twin_cost }}</p>
+        <p><strong>Power:</strong> {{ card.twin_power }}</p>
+        <p><strong>Race:</strong> {{ card.twin_tribe }}</p>
+
+        <strong>Japanese Text:</strong>
+        <div class="long-text">{{ card.twin_text_ja }}</div>
+
+        <strong>English Text:</strong>
+        <div class="long-text">{{ card.twin_text_en }}</div>
+    </div>
+    {% endif %}
+
+    <div style="margin-top: 20px; text-align:center;">
+        <a href="{{ url_for('index') }}">← 一覧に戻る</a>
+    </div>
+
+    {% if session.get('admin') %}
+        <div style="margin-top: 10px; text-align:center;">
+            <a href="{{ url_for('edit_card', id=card.id) }}">
+                <button>編集する</button>
+            </a>
+            <form action="{{ url_for('delete_image', id=card.id) }}" method="post" onsubmit="return confirm('本当に削除しますか？');" style="display:inline;">
+              <button type="submit" style="background-color:red; color:white;">削除する</button>
+            </form>
+        </div>
+    {% endif %}
+</div>
+
+</body>
+
+</html>

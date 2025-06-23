@@ -1,0 +1,90 @@
+<h1>画像アップロード</h1>
+
+    <form action="/upload" method="post" enctype="multipart/form-data">
+        <!-- 画像 -->
+        <label>カード画像:</label>
+        <input type="file" name="file" required><br><br>
+        <label>画像2（任意）:</label>
+        <input type="file" name="file2"><br>
+
+    
+        <!-- メインカード情報 -->
+        <label>名前（日本語）:</label>
+        <input type="text" name="name_ja"><br>
+
+        <label>名前（読み）:</label>
+        <input type="text" name="name_ja_kana"><br>
+    
+        <label>名前（英語）:</label>
+        <input type="text" name="name_en"><br>
+    
+        <label>カードタイプ:</label>
+        <input type="text" name="card_type"><br>
+    
+        <label>文明:</label>
+        <input type="text" name="civilization"><br>
+    
+        <label>コスト:</label>
+        <input type="number" name="cost"><br>
+    
+        <label>テキスト（日本語）:</label><br>
+        <textarea name="text_ja" rows="3" cols="50"></textarea><br>
+    
+        <label>テキスト（英語）:</label><br>
+        <textarea name="text_en" rows="3" cols="50"></textarea><br>
+    
+        <label>パワー:</label>
+        <input type="text" name="power"><br>
+    
+        <label>種族:</label>
+        <input type="text" name="tribe"><br>
+    
+        <label>イラストレーター:</label><br>
+        <textarea name="illustrator" rows="2" cols="50">{{ card.illustrator if card else '' }}</textarea><br>
+
+        <label>収録セット:</label><br>
+        <textarea name="set_name" rows="2" cols="50">{{ card.set_name if card else '' }}</textarea><br><br>
+
+
+        <label>備考：</label><br>
+        <textarea name="note">{{ card.note if card else '' }}</textarea><br>
+
+    
+        <!-- ツインインパクトカード用 -->
+        <h3>（任意）ツインインパクトカード情報</h3>
+    
+        <label>名前（日本語）:</label>
+        <input type="text" name="twin_name_ja"><br>
+
+        <label>名前（読み）:</label>
+        <input type="text" name="twin_name_ja_kana"><br>
+    
+        <label>名前（英語）:</label>
+        <input type="text" name="twin_name_en"><br>
+    
+        <label>カードタイプ:</label>
+        <input type="text" name="twin_card_type"><br>
+    
+        <label>文明:</label>
+        <input type="text" name="twin_civilization"><br>
+    
+        <label>コスト:</label>
+        <input type="number" name="twin_cost"><br>
+    
+        <label>テキスト（日本語）:</label><br>
+        <textarea name="twin_text_ja" rows="3" cols="50"></textarea><br>
+    
+        <label>テキスト（英語）:</label><br>
+        <textarea name="twin_text_en" rows="3" cols="50"></textarea><br>
+    
+        <label>パワー:</label>
+        <input type="text" name="twin_power"><br>
+    
+        <label>種族:</label>
+        <input type="text" name="twin_tribe"><br>
+    
+
+    
+        <!-- ボタン -->
+        <button type="submit">カードを登録</button>
+    </form>
