@@ -356,7 +356,7 @@ def admin_delete(id):
 def admin_login():
     if request.method == 'POST':
         password = request.form.get('password')
-        if password == os.environ.get('ADMIN_PASSWORD'):  # 環境変数などで管理推奨
+        if password == os.environ.get('ADMIN_PASSWORD'):  # 環境変数で管理
             session['admin'] = True
             flash('ログイン成功')
             return redirect(url_for('admin_dashboard'))
@@ -370,6 +370,7 @@ def admin_logout():
     session.pop('admin', None)
     flash('ログアウトしました')
     return redirect(url_for('index'))
+
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):

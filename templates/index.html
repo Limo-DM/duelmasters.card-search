@@ -373,6 +373,13 @@
       });
     </script>
 
+  {% if session.get('admin') %}
+      <p><a href="{{ url_for('logout') }}">🔓 ログアウト</a></p>
+  {% else %}
+     <p><a href="{{ url_for('admin_login') }}">🔐 管理者としてログイン</a></p>
+  {% endif %}
+
+
 
 </body>
 </html>
