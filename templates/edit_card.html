@@ -13,6 +13,25 @@
 </head>
 <body>
     <h1>カード情報を編集</h1>
+    <form action="{{ url_for('delete_image', id=card.id) }}" method="post"
+        onsubmit="return confirm('画像1を削除しますか？');">
+      <input type="hidden" name="target" value="1">
+      <button type="submit">画像1を削除</button>
+    </form>
+    <form action="{{ url_for('delete_image', id=card.id) }}" method="post"
+      onsubmit="return confirm('画像2を削除しますか？');">
+     <input type="hidden" name="target" value="2">
+     <button type="submit">画像2を削除</button>
+    </form>
+    <form action="{{ url_for('delete_image', id=card.id) }}" method="post"
+      onsubmit="return confirm('画像1・画像2の両方を削除しますか？');">
+     <input type="hidden" name="target" value="both">
+     <button type="submit">画像を両方削除</button>
+    </form>
+
+
+
+
 
     <form action="{{ url_for('edit_card', id=card.id) }}" method="post" enctype="multipart/form-data">
         <label>現在の画像:</label><br>

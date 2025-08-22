@@ -21,18 +21,22 @@
 
 /* カードグリッド */
     .card-grid {
-       display: flex;
+       display: grid;
+       grid-template-columns: repeat(5, 220px);
+       gap: 16px 16px;     
        flex-wrap: wrap;
        justify-content: center;
        margin-top: 40px;
     }
 
     .card {
-       width: 200px;
+       width: 220px;
        margin: 10px;
        text-align: center;
        box-sizing: border-box;
     }  
+
+
 
     img {
        width: 100%;
@@ -152,7 +156,37 @@
        gap: 30px;
        margin-top: 10px;
        margin-bottom: 20px;
-    }
+      }
+    
+    /* ページの <style> 内 or CSS ファイルに追加 */
+    /* 文字を白に */
+    
+     .x-link{
+        display:inline-flex;
+        align-items:center;
+        gap:10px;           /* 文字との間隔 */
+        text-decoration:none;
+        color:#000;         /* 文字を白に */
+      }
+
+     .x-logo{
+        width:32px;         /* 好きなサイズに */
+        height:32px;        /* 正方形で表示 */
+       display:block;
+        /* 画像自体に角丸が描かれているので通常は不要。
+        角をもっと丸く／四角くしたいなら下を調整：
+       border-radius: 0;   四角
+       border-radius: 8px; 角丸
+       */
+     }
+
+      /* ホバー時の演出（任意） */
+     .x-link:hover .x-logo{
+        filter: brightness(1.1);
+      }
+
+
+
 
 /* レスポンシブ対応（スマホサイズ） */
     @media (max-width: 600px) {
@@ -170,11 +204,14 @@
            width: 80%;
            height: 22px;
         }
-       .card {
-           width: calc(50% - 20px); /* 2列表示 */
-           margin: 10px;
+       .card-grid {
+          grid-template-columns: repeat(2, 1fr); /* 2列 */
+          gap: 12px;
+          padding: 0 8px;
         }
+        .card { width: 100%; }
     }
+    
 
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
@@ -191,22 +228,6 @@
            value="{{ request.args.get('query', '') }}">
     <br>
 
-    <!-- 検索対象 -->
-    <div style="margin: 10px 0;">
-        <span>Search target:</span>
-        <div style="margin-top: 5px;">
-            <input type="checkbox" name="fields" value="name"
-                   {% if 'name' in request.args.getlist('fields') %}checked{% endif %}> Card Name
-            <input type="checkbox" name="fields" value="reading"
-                   {% if 'reading' in request.args.getlist('fields') %}checked{% endif %}> JP（読み）
-            <input type="checkbox" name="fields" value="text"
-                   {% if 'text' in request.args.getlist('fields') %}checked{% endif %}> Text
-            <input type="checkbox" name="fields" value="tribe"
-                   {% if 'tribe' in request.args.getlist('fields') %}checked{% endif %}> Race
-            <input type="checkbox" name="fields" value="illustrator"
-                   {% if 'illustrator' in request.args.getlist('fields') %}checked{% endif %}> Illustrator
-        </div>
-    </div>
 
     <!-- Cost / Power -->
     <div style="margin: 10px 0;">
@@ -241,7 +262,7 @@
             <input type="hidden" name="civilization" id="civilization-input"
                    value="{{ ','.join(request.args.getlist('civilization')) }}">
 
-            {% for civ in ['Fire', 'Water', 'Nature', 'Light', 'Darkness', 'Zero'] %}
+            {% for civ in ['Fire', 'Water', 'Nature', 'Light', 'Darkness', 'Colorless'] %}
                 <div class="civ-wrapper">
                     <div class="civilization-icon {% if civ in request.args.getlist('civilization') %}selected{% endif %}"
                          style="background-image: url('/static/icons/{{ civ | lower }}.png');"
@@ -290,7 +311,7 @@
 
     <!-- 📇 カード画像一覧 -->
     <div class="card-grid">
-        {% for card in cards.items %}
+        {% for card in cards %}
             <div class="card">
                 <a href="{{ url_for('card_detail', id=card.id) }}">
                     <img src="{{ card.image_url }}" alt="{{ card.name_ja }}">
@@ -302,19 +323,20 @@
     <div style="margin-top: 20px;">
      {% set args = request.args.to_dict() %}
 
-     {% if cards.has_prev %}
-         {% set args_prev = args.copy() %}
-         {% set _ = args_prev.update({'page': cards.prev_num}) %}
-         <a href="{{ url_for('search', **args_prev) }}">« 前へ</a>
+     {% if has_prev %}
+       {% set args_prev = args.copy() %}
+       {% set _ = args_prev.update({'page': prev_num}) %}
+       <a href="{{ url_for('search', **args_prev) }}">« 前へ</a>
      {% endif %}
 
-     <span>Page {{ cards.page }} / {{ cards.pages }}</span>
+     <span>Page {{ page }} / {{ pages }}</span>
 
-     {% if cards.has_next %}
-         {% set args_next = args.copy() %}
-         {% set _ = args_next.update({'page': cards.next_num}) %}
-         <a href="{{ url_for('search', **args_next) }}">次へ »</a>
+     {% if has_next %}
+       {% set args_next = args.copy() %}
+       {% set _ = args_next.update({'page': next_num}) %}
+       <a href="{{ url_for('search', **args_next) }}">次へ »</a>
      {% endif %}
+
     </div>
 
 
@@ -374,10 +396,15 @@
     </script>
 
   {% if session.get('admin') %}
-      <p><a href="{{ url_for('logout') }}">🔓 ログアウト</a></p>
-  {% else %}
-     <p><a href="{{ url_for('admin_login') }}">🔐 管理者としてログイン</a></p>
+      <p><a href="{{ url_for('admin_logout') }}">🔓 ログアウト</a></p>
   {% endif %}
+  <!-- どこか本文内に置く -->
+ <!-- テキスト＋アイコンの例 -->
+  <a class="x-link" href="https://x.com/unknow0627" target="_blank" rel="noopener noreferrer" aria-label="XでDM">
+    <img class="x-logo" src="{{ url_for('static', filename='icons/x.png') }}" alt="X logo">
+    <span>Please DM me with your inquiries.</span>
+  </a>
+
 
 
 

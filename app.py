@@ -1,11 +1,11 @@
-
+# ↓ これ残す
 import os
 import uuid
 import logging
 import markdown
 import cloudinary
 import cloudinary.uploader
-from flask import Flask, request, render_template, redirect, url_for, send_from_directory, session, flash
+from flask import Flask, request, render_template, redirect, url_for, send_from_directory, session, flash, abort
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import or_, and_, cast
 from sqlalchemy.types import Integer
@@ -13,6 +13,15 @@ from flask_migrate import Migrate
 from functools import wraps
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
+
+# Supabase クライアント（自作ファイル）だけ使う
+from supabase_client import supabase
+
+
+
+
+
+
 
 load_dotenv()
 
@@ -43,6 +52,18 @@ cloudinary.config(
   secure = True
 )
 
+
+def to_int(val):
+    if val is None:
+        return None
+    if isinstance(val, (int, float)):
+        return int(val)
+    s = str(val).strip().replace(',', '')
+    if s == '':
+        return None
+    return int(s) if s.lstrip('-').isdigit() else None
+
+
 # 管理者認証デコレーター
 def admin_required(func):
     @wraps(func)
@@ -68,7 +89,7 @@ class Card(db.Model):
     cost = db.Column(db.Integer)
     text_ja = db.Column(db.Text)
     text_en = db.Column(db.Text)
-    power = db.Column(db.String(50))
+    power = db.Column(db.Integer)
     tribe = db.Column(db.String(255))
     illustrator = db.Column(db.String(255))
     set_name = db.Column(db.String(255))
@@ -81,7 +102,7 @@ class Card(db.Model):
     twin_cost = db.Column(db.Integer)
     twin_text_ja = db.Column(db.Text)
     twin_text_en = db.Column(db.Text)
-    twin_power = db.Column(db.String(50))
+    twin_power = db.Column(db.Integer)
     twin_tribe = db.Column(db.String(255))
 
 with app.app_context():
@@ -90,267 +111,441 @@ with app.app_context():
 @app.route('/')
 def index():
     page = request.args.get('page', 1, type=int)
-    cards = Card.query.order_by(Card.id.desc()).paginate(page=page, per_page=20)
-    return render_template('index.html', cards=cards)
+    per_page = 20
+
+    try:
+        response = supabase.table("Cards").select("*").order("id", desc=True).execute()
+        all_cards = response.data or []
+
+        # ページネーション処理
+        total = len(all_cards)
+        start = (page - 1) * per_page
+        end = start + per_page
+        paginated_cards = all_cards[start:end]
+
+        has_prev = page > 1
+        has_next = end < total
+        prev_num = page - 1
+        next_num = page + 1
+        pages = (total + per_page - 1) // per_page
+
+        return render_template(
+            'index.html',
+            cards=paginated_cards,
+            page=page,
+            has_prev=has_prev,
+            has_next=has_next,
+            prev_num=prev_num,
+            next_num=next_num,
+            pages=pages,
+            search_query=""
+        )
+
+    except Exception as e:
+        return f"トップページの取得でエラーが発生しました: {e}", 500
+
+
 
 
 @app.route('/search')
 def search():
-    tribe = request.args.get('tribe', '').strip()
-    civilizations_raw = request.args.get('civilization', '')
-    civilizations = [c for c in civilizations_raw.split(',') if c.strip()]
-    mode = request.args.get('mode', 'or')
     query_text = request.args.get('query', '').strip()
-    selected_fields = request.args.getlist('fields')
-    cost_min = request.args.get('cost_min', '').strip()
-    cost_max = request.args.get('cost_max', '').strip()
-    power_min = request.args.get('power_min', '').strip()
-    power_max = request.args.get('power_max', '').strip()
-    color_mode = request.args.get('color_mode', 'all')
+    tribe = request.args.get('tribe', '').strip()
+    # 受け取り方を変更：複数文明・色タイプ・AND/OR
+    civilizations_raw = request.args.get('civilization', '')  # "Fire,Water" みたいなCSV
+    selected_civs = [c.strip() for c in civilizations_raw.split(',') if c.strip()]
+    color_mode   = request.args.get('color_mode', 'all')      # "all" | "mono" | "multi"
+    mode         = request.args.get('mode', 'or')  
+    cost_min = request.args.get('cost_min', type=int)
+    cost_max = request.args.get('cost_max', type=int)
+    power_min = request.args.get('power_min', type=int)
+    power_max = request.args.get('power_max', type=int)
     page = request.args.get('page', 1, type=int)
     per_page = 20
 
-    query = Card.query.order_by(Card.id.desc())
+    
+
+    try:
+        # 全件取得（本番では条件に応じて最適化するのが理想）
+        response = supabase.table("Cards").select("*").execute()
+        all_cards = response.data or []
+
+        # 絞り込み（Python側で処理）
+        if query_text:
+            all_cards = [
+                card for card in all_cards
+                if query_text.lower() in (card.get('name_ja') or '').lower()
+                or query_text.lower() in (card.get('name_en') or '').lower()
+                or query_text.lower() in (card.get('text_ja') or '').lower()
+                or query_text.lower() in (card.get('text_en') or '').lower()
+                or query_text.lower() in (card.get('name_ja_kana') or '').lower()
+                or query_text.lower() in (card.get('illustrator') or '').lower()
+                or query_text.lower() in (card.get('note') or '').lower()
+            ]
+
+        if tribe:
+            all_cards = [
+                card for card in all_cards
+                if tribe.lower() in (card.get('tribe') or '').lower()
+            ]
 
 
-    if not selected_fields:
-        selected_fields = ['name', 'reading', 'text', 'tribe', 'illustrator']
+        def is_multi(s: str) -> bool:
+            return '/' in s if s else False
 
-    filters = []
-    if query_text:
-        if 'name' in selected_fields:
-            filters.extend([Card.name_ja.contains(query_text), Card.name_en.contains(query_text), Card.twin_name_ja.contains(query_text), Card.twin_name_en.contains(query_text)])
-        if 'reading' in selected_fields:
-            filters.extend([Card.name_ja_kana.contains(query_text), Card.twin_name_ja_kana.contains(query_text)])
-        if 'text' in selected_fields:
-            filters.extend([Card.text_ja.contains(query_text), Card.text_en.contains(query_text), Card.twin_text_ja.contains(query_text), Card.twin_text_en.contains(query_text), Card.note.contains(query_text)])
-        if 'tribe' in selected_fields:
-            filters.append(Card.tribe.contains(query_text))
-        if 'illustrator' in selected_fields:
-            filters.append(Card.illustrator.contains(query_text))
-    if filters:
-        query = query.filter(or_(*filters))
+        def is_mono(s: str) -> bool:
+            return (s or '') != '' and '/' not in s
 
-    if cost_min.isdigit():
-        query = query.filter(or_(Card.cost >= int(cost_min), Card.twin_cost >= int(cost_min)))
-    if cost_max.isdigit():
-        query = query.filter(or_(Card.cost <= int(cost_max), Card.twin_cost <= int(cost_max)))
-    if power_min.isdigit():
-        query = query.filter(or_(cast(Card.power, Integer) >= int(power_min), cast(Card.twin_power, Integer) >= int(power_min)))
-    if power_max.isdigit():
-        query = query.filter(or_(cast(Card.power, Integer) <= int(power_max), cast(Card.twin_power, Integer) <= int(power_max)))
+        def civ_tokens(s: str):
+            """'Fire/Water' -> ['Fire','Water']（全角スラッシュも考慮）"""
+            if not s:
+                return []
+            s = s.replace('／', '/')
+            return [p.strip() for p in s.split('/') if p.strip()]
 
-    if tribe:
-        query = query.filter(Card.tribe.contains(tribe))
+        def field_matches_target(field_value: str, target: str, color_mode: str) -> bool:
+            """1つの文明フィールド（メイン or ツイン）が target を満たすか"""
+            if not field_value:
+                return False
+            # 色タイプでふるい分け
+            if color_mode == 'mono' and not is_mono(field_value):
+                return False
+            if color_mode == 'multi' and not is_multi(field_value):
+                return False
+            # トークンで厳密一致（大文字小文字は無視）
+            tokens = civ_tokens(field_value)
+            t = target.lower()
+            return any(tok.lower() == t for tok in tokens) if tokens else (t in field_value.lower())
 
-    apply_civ_filter = civilizations or color_mode in ['mono', 'multi']
-    if apply_civ_filter:
-        civ_filters = []
-        if civilizations:
-            for civ in civilizations:
+        def card_matches_target(card: dict, target: str, color_mode: str) -> bool:
+            """カード（メイン or ツインどちらか）が target を満たすか"""
+            return (
+                field_matches_target(card.get('civilization'),     target, color_mode) or
+                field_matches_target(card.get('twin_civilization'), target, color_mode)
+            )
+
+        # 選択文明あり → AND/OR で絞る
+        if selected_civs:
+            if mode == 'and':
+                all_cards = [
+                    c for c in all_cards
+                    if all(card_matches_target(c, civ, color_mode) for civ in selected_civs)
+                ]
+            else:  # 'or'
+                all_cards = [
+                    c for c in all_cards
+                    if any(card_matches_target(c, civ, color_mode) for civ in selected_civs)
+                ]
+        else:
+            # 文明は未選択だが単色／多色だけ指定された場合
+            if color_mode in ('mono', 'multi'):
+                def card_is_mono(card):
+                    main = card.get('civilization') or ''
+                    twin = card.get('twin_civilization') or ''
+                    # どちらかが多色なら多色扱い
+                    if is_multi(main) or is_multi(twin):
+                        return False
+                    # どちらかに文明が入っていて、両方とも多色ではない
+                    return bool(main or twin)
+
+                def card_is_multi(card):
+                    return is_multi(card.get('civilization') or '') or is_multi(card.get('twin_civilization') or '')
+
                 if color_mode == 'mono':
-                    civ_filters.append(and_(or_(Card.civilization == civ, Card.twin_civilization == civ), ~Card.civilization.contains('/'), ~Card.twin_civilization.contains('/')))
-                elif color_mode == 'multi':
-                    civ_filters.append(or_(and_(Card.civilization.like(f'%{civ}%'), Card.civilization.contains('/')), and_(Card.twin_civilization.like(f'%{civ}%'), Card.twin_civilization.contains('/'))))
+                    all_cards = [c for c in all_cards if card_is_mono(c)]
                 else:
-                    civ_filters.append(or_(Card.civilization.like(f'%{civ}%'), Card.twin_civilization.like(f'%{civ}%')))
-        else:
-            if color_mode == 'mono':
-                civ_filters.append(and_(~Card.civilization.contains('/'), ~Card.twin_civilization.contains('/')))
-            elif color_mode == 'multi':
-                civ_filters.append(or_(Card.civilization.contains('/'), Card.twin_civilization.contains('/')))
-        if mode == 'and':
-            for f in civ_filters:
-                query = query.filter(f)
-        else:
-            query = query.filter(or_(*civ_filters))
+                    all_cards = [c for c in all_cards if card_is_multi(c)]
 
-    cards = query.paginate(page=page, per_page=per_page)
-    return render_template('index.html', cards=cards)
+        # これを cost フィルタの所に置き換え
+        if cost_min is not None or cost_max is not None:
+          def to_int_safe(v):
+            try:
+                return int(v) if v is not None and str(v).strip() != "" else None
+            except (TypeError, ValueError):
+                return None
+
+          def in_range(v):
+            if v is None:
+               return False
+            if cost_min is not None and v < cost_min:
+               return False
+            if cost_max is not None and v > cost_max:
+               return False
+            return True
+
+          all_cards = [
+             card for card in all_cards
+              if in_range(to_int_safe(card.get('cost'))) or
+              in_range(to_int_safe(card.get('twin_cost')))
+            ]
+
+        
+        # ... cost のフィルタの後あたりに追加
+        if power_min is not None:
+            all_cards = [
+              c for c in all_cards
+              if ((to_int(c.get('power')) is not None and to_int(c.get('power')) >= power_min) or
+                  (to_int(c.get('twin_power')) is not None and to_int(c.get('twin_power')) >= power_min))
+            ]
+
+        if power_max is not None:
+            all_cards = [
+              c for c in all_cards
+              if ((to_int(c.get('power')) is not None and to_int(c.get('power')) <= power_max) or
+                  (to_int(c.get('twin_power')) is not None and to_int(c.get('twin_power')) <= power_max))
+            ]
+
+
+        # ソート（ID降順）
+        all_cards.sort(key=lambda c: c.get("id", 0), reverse=True)
+
+        # ページネーション処理
+        total = len(all_cards)
+        start = (page - 1) * per_page
+        end = start + per_page
+        paginated_cards = all_cards[start:end]
+
+        has_prev = page > 1
+        has_next = end < total
+        prev_num = page - 1
+        next_num = page + 1
+        pages = (total + per_page - 1) // per_page
+
+        # テンプレート描画
+        return render_template(
+            "index.html",
+            cards=paginated_cards,
+            page=page,
+            has_prev=has_prev,
+            has_next=has_next,
+            prev_num=prev_num,
+            next_num=next_num,
+            pages=pages,
+            search_query=query_text
+        )
+
+    except Exception as e:
+        return f"検索中にエラーが発生しました: {e}", 500
+
 
 @app.route('/card/<int:id>')
 def card_detail(id):
-    card = Card.query.get_or_404(id)
+    try:
+        resp = supabase.table("Cards").select("*").eq("id", id).single().execute()
+        card = resp.data
+        if not card:
+            abort(404)
+        note_html = markdown.markdown(card.get('note') or '')
+        return render_template('card_detail.html', card=card, note_html=note_html)
+    except Exception as e:
+        return f"カード取得エラー: {e}", 500
 
-    note_html = markdown.markdown(card.note or '')
-    return render_template('card_detail.html', card=card,note_html=note_html)
 
 @app.route('/admin')
 @admin_required
 def admin_dashboard():
-    query = request.args.get('query', '').strip()
+    page = request.args.get('page', 1, type=int)
+    per_page = 10
+    search_query = request.args.get('query', '').strip()
 
-    if query:
-        filtered_cards = Card.query.filter(
-            or_(
-                Card.name_ja.contains(query),
-                Card.name_en.contains(query),
-                Card.tribe.contains(query),
-                Card.civilization.contains(query)
-            )
-        ).all()
-    else:
-        filtered_cards = Card.query.all()
+    try:
+        query = supabase.table("Cards").select("*")
 
-        db.session.commit()
-        # app.pyのこの部分を修正してください
-    
+        if search_query:
+            pattern = f"%{search_query}%"
+            # or_ は「1つの文字列」にカンマ区切りで条件を書く
+            or_filters = ",".join([
+                f"name_ja.ilike.{pattern}",
+                f"name_en.ilike.{pattern}",
+                f"tribe.ilike.{pattern}",
+                f"civilization.ilike.{pattern}",
+                f"text_ja.ilike.{pattern}",
+                f"text_en.ilike.{pattern}",
+                f"illustrator.ilike.{pattern}",
+                f"set_name.ilike.{pattern}",
+            ])
+            query = query.or_(or_filters)   # ← ここがポイント
+
+        # ページネーション
+        query = query.order("id", desc=True).range((page - 1) * per_page,
+                                                   page * per_page - 1)
+        response = query.execute()
+        cards = response.data or []
+
+    except Exception as e:
+        flash(f"エラーが発生しました: {e}")
+        cards = []
+
+    return render_template("admin_dashboard.html",
+                           cards=cards,
+                           search_query=search_query)
 
 
-    return render_template('admin_dashboard.html', cards=filtered_cards, search_query=query)
+
+
+from supabase import create_client, Client
 
 @app.route('/upload', methods=['GET', 'POST'])
 @admin_required
 def upload_file():
     if request.method == 'POST':
-        # メインカード情報
-        name_ja = request.form.get('name_ja')
-        name_ja_kana = request.form.get('name_ja_kana')
-        name_en = request.form.get('name_en')
-        card_type = request.form.get('card_type')
-        civilization = request.form.get('civilization')
-        cost = request.form.get('cost', type=int)
-        text_ja = request.form.get('text_ja')
-        text_en = request.form.get('text_en')
-        power = request.form.get('power')
-        tribe = request.form.get('tribe')
-        illustrator = request.form.get('illustrator')
-        set_name = request.form.get('set_name')
-        note = request.form.get('note')
+        # ---- 文字列で受ける ----
+        name_ja          = request.form.get('name_ja')
+        name_ja_kana     = request.form.get('name_ja_kana')
+        name_en          = request.form.get('name_en')
+        card_type        = request.form.get('card_type')
+        civilization     = request.form.get('civilization')
+        cost_raw         = request.form.get('cost')          # ← 文字列
+        text_ja          = request.form.get('text_ja')
+        text_en          = request.form.get('text_en')
+        power_raw        = request.form.get('power')         # ← 文字列
+        tribe            = request.form.get('tribe')
+        illustrator      = request.form.get('illustrator')
+        set_name         = request.form.get('set_name')
+        note             = request.form.get('note')
 
-        # ツインインパクト情報
-        twin_name_ja = request.form.get('twin_name_ja')
-        twin_name_ja_kana = request.form.get('twin_name_ja_kana')
-        twin_name_en = request.form.get('twin_name_en')
-        twin_card_type = request.form.get('twin_card_type')
-        twin_civilization = request.form.get('twin_civilization')
-        twin_cost = request.form.get('twin_cost', type=int)
-        twin_text_ja = request.form.get('twin_text_ja')
-        twin_text_en = request.form.get('twin_text_en')
-        twin_power = request.form.get('twin_power')
-        twin_tribe = request.form.get('twin_tribe')
+        twin_name_ja         = request.form.get('twin_name_ja')
+        twin_name_ja_kana    = request.form.get('twin_name_ja_kana')
+        twin_name_en         = request.form.get('twin_name_en')
+        twin_card_type       = request.form.get('twin_card_type')
+        twin_civilization    = request.form.get('twin_civilization')
+        twin_cost_raw        = request.form.get('twin_cost')     # ← 文字列
+        twin_text_ja         = request.form.get('twin_text_ja')
+        twin_text_en         = request.form.get('twin_text_en')
+        twin_power_raw       = request.form.get('twin_power')    # ← 文字列
+        twin_tribe           = request.form.get('twin_tribe')
 
-        # 画像保存（file, file2）
-        file = request.files.get('file')
+        # ---- 数値化 ----
+        cost       = to_int(cost_raw)
+        power      = to_int(power_raw)
+        twin_cost  = to_int(twin_cost_raw)
+        twin_power = to_int(twin_power_raw)
+
+        # ---- 画像アップロード ----
+        file  = request.files.get('file')
         file2 = request.files.get('file2')
-        image_public_id = None
-        image_public_id2 = None
+        image_url = image_url2 = image_public_id = image_public_id2 = None
 
         if file and file.filename:
             result = cloudinary.uploader.upload(file)
-            image_url = result['secure_url']
-            image_public_id = result['public_id']
-
+            image_url = result.get('secure_url')
+            image_public_id = result.get('public_id')
 
         if file2 and file2.filename:
             result2 = cloudinary.uploader.upload(file2)
-            image_url2 = result2['secure_url']
-            image_public_id2 = result2['public_id']
+            image_url2 = result2.get('secure_url')
+            image_public_id2 = result2.get('public_id')
 
-        # カード登録
-        new_card = Card(
-            name_ja=name_ja,
-            name_ja_kana=name_ja_kana,
-            name_en=name_en,
-            card_type=card_type,
-            civilization=civilization,
-            cost=cost,
-            text_ja=text_ja,
-            text_en=text_en,
-            power=power,
-            tribe=tribe,
-            illustrator=illustrator,
-            set_name=set_name,
-            note=note,
-            twin_name_ja=twin_name_ja,
-            twin_name_ja_kana=twin_name_ja_kana,
-            twin_name_en=twin_name_en,
-            twin_card_type=twin_card_type,
-            twin_civilization=twin_civilization,
-            twin_cost=twin_cost,
-            twin_text_ja=twin_text_ja,
-            twin_text_en=twin_text_en,
-            twin_power=twin_power,
-            twin_tribe=twin_tribe,
-            image_url=image_url if file else None,
-            image_url2=image_url2 if file2 else None,
-            image_public_id=image_public_id,        # ← 追加
-            image_public_id2=image_public_id2 
-        )
-        db.session.add(new_card)
-        db.session.commit()
-        flash('カードを登録しました。')
+        # ---- Supabase へ挿入 ----
+        data = {
+          "name_ja": name_ja,
+          "name_ja_kana": name_ja_kana,
+          "name_en": name_en,
+          "card_type": card_type,
+          "civilization": civilization,
+          "cost": cost,
+          "text_ja": text_ja,
+          "text_en": text_en,
+          "power": power,
+          "tribe": tribe,
+          "illustrator": illustrator,
+          "set_name": set_name,
+          "note": note,
+          "twin_name_ja": twin_name_ja,
+          "twin_name_ja_kana": twin_name_ja_kana,
+          "twin_name_en": twin_name_en,
+          "twin_card_type": twin_card_type,
+          "twin_civilization": twin_civilization,
+          "twin_cost": twin_cost,
+          "twin_text_ja": twin_text_ja,
+          "twin_text_en": twin_text_en,
+          "twin_power": twin_power,
+          "twin_tribe": twin_tribe,
+          "image_url": image_url,
+          "image_url2": image_url2,
+          "image_public_id": image_public_id,
+          "image_public_id2": image_public_id2,
+        }
+
+        try:
+            response = supabase.table("Cards").insert(data).execute()
+            flash("カードを登録しました。")
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            flash(f"Supabase登録に失敗: {e}")
+            return redirect(url_for('upload_file'))
+
         return redirect(url_for('admin_dashboard'))
 
     return render_template('upload.html')
 
 
-@app.route('/card/<int:id>/edit', methods=['GET', 'POST']) 
-def edit_card(id):
-    card = Card.query.get_or_404(id)
 
+
+
+@app.route('/card/<int:id>/edit', methods=['GET', 'POST']) 
+@admin_required
+def edit_card(id):
     if request.method == 'POST':
-        # 画像1
+        updated_data = {
+            "name_ja": request.form.get('name_ja'),
+            "name_ja_kana": request.form.get('name_ja_kana'),
+            "name_en": request.form.get('name_en'),
+            "card_type": request.form.get('card_type'),
+            "civilization": request.form.get('civilization'),
+            # ↓ 安全に数値化
+            "cost": to_int(request.form.get('cost')),
+            "text_ja": request.form.get('text_ja'),
+            "text_en": request.form.get('text_en'),
+            "power": to_int(request.form.get('power')),
+            "tribe": request.form.get('tribe'),
+            "illustrator": request.form.get('illustrator'),
+            "set_name": request.form.get('set_name'),
+            "note": request.form.get('note'),
+            "twin_name_ja": request.form.get('twin_name_ja'),
+            "twin_name_ja_kana": request.form.get('twin_name_ja_kana'),
+            "twin_name_en": request.form.get('twin_name_en'),
+            "twin_card_type": request.form.get('twin_card_type'),
+            "twin_civilization": request.form.get('twin_civilization'),
+            "twin_cost": to_int(request.form.get('twin_cost')),
+            "twin_text_ja": request.form.get('twin_text_ja'),
+            "twin_text_en": request.form.get('twin_text_en'),
+            "twin_power": to_int(request.form.get('twin_power')),
+            "twin_tribe": request.form.get('twin_tribe')
+        }
+
         file = request.files.get('file')
         file2 = request.files.get('file2')
 
-     # 画像1：アップロードされたらCloudinaryに上書き、なければ元のURLを使う
         if file and file.filename:
             result = cloudinary.uploader.upload(file)
-            card.image_url = result['secure_url']  # ← 上書き
-            card.image_public_id = result['public_id']
-        # else: なにもしない（そのまま）
+            updated_data["image_url"] = result.get("secure_url")
+            updated_data["image_public_id"] = result.get("public_id")
 
-        # 画像2：同様
         if file2 and file2.filename:
             result2 = cloudinary.uploader.upload(file2)
-            card.image_url2 = result2['secure_url']
-            card.image_public_id2 = result2['public_id'] 
+            updated_data["image_url2"] = result2.get("secure_url")
+            updated_data["image_public_id2"] = result2.get("public_id")
 
+        try:
+            supabase.table("Cards").update(updated_data).eq("id", id).execute()
+            flash("カード情報を更新しました")
+        except Exception as e:
+            flash(f"更新に失敗しました: {e}")
+            return redirect(url_for('edit_card', id=id))
 
-
-        # 通常項目の更新（そのままでOK）
-        card.name_ja = request.form['name_ja']
-        card.name_ja_kana = request.form['name_ja_kana']
-        card.name_en = request.form['name_en']
-        card.card_type = request.form['card_type']
-        card.civilization = request.form['civilization']
-        card.cost = request.form.get('cost', type=int)
-        card.text_ja = request.form['text_ja']
-        card.text_en = request.form['text_en']
-        card.power = request.form['power']
-        card.tribe = request.form['tribe']
-        card.illustrator = request.form['illustrator']
-        card.set_name = request.form['set_name']
-        card.note = request.form['note']
-
-        # ツインインパクト
-        card.twin_name_ja = request.form['twin_name_ja']
-        card.twin_name_ja_kana = request.form['twin_name_ja_kana']
-        card.twin_name_en = request.form['twin_name_en']
-        card.twin_card_type = request.form['twin_card_type']
-        card.twin_civilization = request.form['twin_civilization']
-        card.twin_cost = request.form.get('twin_cost', type=int)
-        card.twin_text_ja = request.form['twin_text_ja']
-        card.twin_text_en = request.form['twin_text_en']
-        card.twin_power = request.form['twin_power']
-        card.twin_tribe = request.form['twin_tribe']
-
-        db.session.commit()
-        flash('カード情報を更新しました')
         return redirect(url_for('admin_dashboard'))
 
-    return render_template('edit_card.html', card=card)
+    # GET はそのまま
+    try:
+        response = supabase.table("Cards").select("*").eq("id", id).single().execute()
+        card = response.data
+        return render_template('edit_card.html', card=card)
+    except Exception as e:
+        return f"カード取得エラー: {e}", 500
 
 
-@app.route('/admin/delete/<int:id>', methods=['POST'])
-@admin_required
-def admin_delete(id):
-    card = Card.query.get_or_404(id)
-    db.session.delete(card)
-    db.session.commit()
-    flash('カードを削除しました')
-    return redirect(url_for('admin_dashboard'))
+
 
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
@@ -376,25 +571,86 @@ def admin_logout():
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-if __name__ == '__main__':
-    app.run(debug=True)
+@app.route('/admin/delete/<int:id>', methods=['POST'])
+@admin_required
+def admin_delete(id):
+    try:
+        # Supabaseから public_id を取り出し（Cloudinary削除のため）
+        resp = supabase.table("Cards").select("image_public_id, image_public_id2").eq("id", id).single().execute()
+        card = resp.data or {}
+
+        # Cloudinary画像の削除（あれば）
+        pub1 = card.get('image_public_id')
+        pub2 = card.get('image_public_id2')
+        try:
+            if pub1: cloudinary.uploader.destroy(pub1)
+            if pub2: cloudinary.uploader.destroy(pub2)
+        except Exception:
+            pass  # 画像削除失敗してもDB削除は続行
+
+        # Supabase行の削除
+        supabase.table("Cards").delete().eq("id", id).execute()
+
+        flash('カードを削除しました')
+    except Exception as e:
+        flash(f'削除時にエラーが発生しました: {e}')
+
+    return redirect(url_for('admin_dashboard'))
+
 
 @app.route('/delete_image/<int:id>', methods=['POST'])
 @admin_required
 def delete_image(id):
-    card = Card.query.get_or_404(id)
+    # フォームから削除対象を取得: "1" / "2" / "both"（デフォルト both）
+    target = (request.form.get('target') or 'both').lower()
 
-    if card.image_public_id:
-        cloudinary.uploader.destroy(card.image_public_id)
-    if card.image_public_id2:
-        cloudinary.uploader.destroy(card.image_public_id2)
+    try:
+        # まず public_id を取得（Cloudinary削除のため）
+        resp = supabase.table("Cards")\
+            .select("image_public_id, image_public_id2")\
+            .eq("id", id).single().execute()
+        row = resp.data or {}
 
-    db.session.delete(card)
-    db.session.commit()
-    
-    
-    flash('画像を削除しました')
+        pub1 = row.get('image_public_id')
+        pub2 = row.get('image_public_id2')
+
+        # Cloudinary 側の削除（存在する場合のみ）
+        if target in ('1', 'both') and pub1:
+            try:
+                cloudinary.uploader.destroy(pub1)
+            except Exception as ce:
+                logging.warning(f"Cloudinary destroy (image1) failed for id={id}: {ce}")
+
+        if target in ('2', 'both') and pub2:
+            try:
+                cloudinary.uploader.destroy(pub2)
+            except Exception as ce:
+                logging.warning(f"Cloudinary destroy (image2) failed for id={id}: {ce}")
+
+        # DBのURL/IDをクリア
+        update_data = {}
+        if target in ('1', 'both'):
+            update_data.update({"image_url": None, "image_public_id": None})
+        if target in ('2', 'both'):
+            update_data.update({"image_url2": None, "image_public_id2": None})
+
+        if update_data:
+            supabase.table("Cards").update(update_data).eq("id", id).execute()
+
+        msg = "画像1と画像2を削除しました" if target == 'both' else f"画像{target}を削除しました"
+        flash(msg)
+
+    except Exception as e:
+        flash(f"画像削除エラー: {e}")
+
     return redirect(url_for('edit_card', id=id))
+
+
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
+
 
 
 
