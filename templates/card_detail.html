@@ -133,13 +133,12 @@
             </div>
 
             <div class="section-block">
-                <strong>Japanese Text:</strong>
-                <div class="long-text">{{ card.text_ja }}</div>
-            </div>
-
-            <div class="section-block">
                 <strong>English Text:</strong>
                 <div class="long-text">{{ card.text_en }}</div>
+            </div>
+            <div class="section-block">
+                <strong>Japanese Text:</strong>
+                <div class="long-text">{{ card.text_ja }}</div>
             </div>
 
             <div class="section-block">
@@ -168,11 +167,11 @@
         <p><strong>Power:</strong> {{ card.twin_power }}</p>
         <p><strong>Race:</strong> {{ card.twin_tribe }}</p>
 
+        <strong>English Text:</strong>
+        <div class="long-text">{{ card.twin_text_en }}</div>
         <strong>Japanese Text:</strong>
         <div class="long-text">{{ card.twin_text_ja }}</div>
 
-        <strong>English Text:</strong>
-        <div class="long-text">{{ card.twin_text_en }}</div>
     </div>
     {% endif %}
 

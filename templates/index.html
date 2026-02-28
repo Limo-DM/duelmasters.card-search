@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Card List</title>
+    <title>Duel Masters Card Search</title>
     <style>
     /* 全体基本 */
     body {
@@ -70,6 +70,7 @@
        border-radius: 10px;
        transition: transform 0.2s, border-color 0.2s;
        cursor: pointer;
+       background-color: #f2f2f2;
     }
 
     .civilization-icon:hover {
@@ -87,6 +88,106 @@
        margin-top: 4px;
        text-align: center;
     }
+
+
+/* Card Type dropdown UI */
+    .ct-wrap {
+      margin: 10px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .ct-label { font-weight: 600; }
+
+    .ct-dropdown { position: relative; min-width: 260px; }
+    .ct-trigger {
+      width: 320px;
+      max-width: 86vw;
+      padding: 10px 12px;
+      border: 1px solid #bbb;
+      border-radius: 8px;
+      background: #fff;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+    .ct-trigger:hover { border-color: #888; }
+    .ct-caret { opacity: 0.7; }
+
+    .ct-panel {
+      position: absolute;
+      z-index: 999;
+      top: calc(100% + 6px);
+      left: 0;
+      width: 360px;
+      max-width: 90vw;
+      max-height: 360px;
+      overflow: auto;
+      background: #fff;
+      border: 1px solid #bbb;
+      border-radius: 10px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+      padding: 10px;
+    }
+
+    .ct-section-title {
+      font-size: 12px;
+      opacity: 0.75;
+      margin: 6px 0 8px;
+      font-weight: 600;
+    }
+
+    .ct-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 6px;
+      border-radius: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .ct-item:hover { background: rgba(0,0,0,0.04); }
+
+    .ct-other-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .ct-mini-btn {
+      padding: 6px 10px;
+      border: 1px solid #bbb;
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+    }
+    .ct-mini-btn:hover { border-color: #888; }
+
+    .ct-custom {
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px dashed #ccc;
+    }
+   .ct-custom-grid {
+     display: flex;
+     flex-wrap: wrap;
+     gap: 6px 10px;
+   }
+   .ct-muted { color: #666; padding: 6px; }
+
+   .ct-actions {
+     display: flex;
+     justify-content: flex-end;
+     gap: 8px;
+     margin-top: 10px;
+   }
+   .ct-wrap{
+     justify-content: center;
+   }
+
 
 /* 色タイプ切り替え */
     #color-mode-selection {
@@ -111,6 +212,90 @@
        background-color: #ffeaea;
        font-weight: bold;
     }
+
+/* ✅ 枠を見やすくする（スマホでも勝つ） */
+    :root{
+      --border: #777;
+      --border-hover: #555;
+      --focus: #2b6cff;
+    }
+
+/* text/number 全部まとめて枠を統一 */
+    input[type="text"],
+    input[type="number"],
+    input.small-input{
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+    }
+
+/* hover/focus を強く */
+    input[type="text"]:hover,
+    input[type="number"]:hover,
+    input.small-input:hover{
+      border-color: var(--border-hover);
+    }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    input.small-input:focus{
+      border-color: var(--focus);
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(43, 108, 255, 0.20);
+    }
+
+/* Card Type の枠も濃く */
+    .ct-trigger{
+      border: 2px solid var(--border);
+    }
+    .ct-trigger:hover{
+      border-color: var(--border-hover);
+    }
+    .ct-panel{
+      border: 2px solid var(--border);
+    }
+
+/* mono/multi の枠も濃く */
+    .color-mode-icon{
+      border: 2px solid var(--border);
+    }
+
+/* 文明アイコン：枠が透明だったので普通に付ける */
+    .civilization-icon{
+      border: 2px solid var(--border); /* ←ここが重要 */
+    }
+    .reset-btn{
+      display:inline-block;
+      margin-left:12px;
+      padding:8px 14px;
+      border:1px solid #bbb;
+      border-radius:8px;
+      background:#f7f7f7;
+      color:#222;
+      text-decoration:none;
+      cursor:pointer;
+      font-weight:600;
+    }
+
+    .reset-btn:hover{
+      background:#eee;
+    }
+
+    .action-buttons{
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;                /* ボタン間の隙間 */
+      margin-top: 16px;
+    }
+
+    .search-btn{
+      padding: 64px 168px;
+      font-size: 20px;
+      min-width: 180px;
+      
+    }
+
 
 /* 入力欄・ボタン */
     input[type="text"] {
@@ -160,7 +345,41 @@
     
     /* ページの <style> 内 or CSS ファイルに追加 */
     /* 文字を白に */
-    
+    .pagination{
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+      margin:20px 0 0;
+    }
+
+    .page-btn, .page-num{
+      padding:8px 12px;
+      border:1px solid #bbb;
+      border-radius:8px;
+      text-decoration:none;
+      color:#222;
+      background:#f7f7f7;
+    }
+
+    .page-num.current{
+      background:#111;
+      color:#fff;
+      border-color:#111;
+      font-weight:700;
+    }
+
+    .page-btn.disabled{
+      opacity:.4;
+      pointer-events:none;
+    } 
+
+    .page-ellipsis{
+      padding:0 6px;
+      color:#666;
+    }
+
      .x-link{
         display:inline-flex;
         align-items:center;
@@ -170,8 +389,8 @@
       }
 
      .x-logo{
-        width:32px;         /* 好きなサイズに */
-        height:32px;        /* 正方形で表示 */
+        width:48px;         /* 好きなサイズに */
+        height:48px;        /* 正方形で表示 */
        display:block;
         /* 画像自体に角丸が描かれているので通常は不要。
         角をもっと丸く／四角くしたいなら下を調整：
@@ -185,11 +404,33 @@
         filter: brightness(1.1);
       }
 
+      .feedback-box{
+        margin: 12px auto 10px;
+        max-width: 700px;
+        padding: 10px 14px;
+        border: 1px solid #ddd;
+        border-radius: 12px;
+        background: #fafafa;
+      }
+
+      .feedback-title{
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+
+      .feedback-url{
+        display: inline-block;
+        text-decoration: underline;
+        word-break: break-all;
+        color: #111;
+      }
 
 
 
 /* レスポンシブ対応（スマホサイズ） */
     @media (max-width: 600px) {
+       body{ margin: 0 !important; }
+
        input[type="text"] {
            width: 90%;
            font-size: 18px;
@@ -205,14 +446,22 @@
            height: 22px;
         }
        .card-grid {
-          grid-template-columns: repeat(2, 1fr); /* 2列 */
-          gap: 12px;
-          padding: 0 8px;
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          gap: 8px !important;
+          padding: 8px !important;
+          margin-top: 16px !important;
         }
-        .card { width: 100%; }
-    }
+        .card {
+	  margin: 0 !important;
+          width: auto !important;
+        }
     
-
+        .card img {
+          display: block;
+          width: 100%;
+          height: auto;
+        }
+    }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -255,6 +504,68 @@
                value="{{ request.args.get('tribe', '') }}">
     </div>
 
+<!-- Card Type (dropdown) -->
+    <div class="ct-wrap">
+      <label class="ct-label">Card Type:</label>
+
+  <!-- hidden inputs (CSV) -->
+      <input type="hidden" name="card_type" id="card-type-input"
+             value="{{ (selected_card_types or []) | join(',') }}">
+      <input type="hidden" name="card_type_detail" id="card-type-detail-input"
+             value="{{ (selected_detail_types or []) | join(',') }}">
+
+      <div class="ct-dropdown" id="ct-dropdown">
+        <button type="button" class="ct-trigger" id="ct-trigger">
+          <span id="ct-trigger-text">Select...</span>
+          <span class="ct-caret">▾</span>
+      </button>
+
+      <div class="ct-panel" id="ct-panel" hidden>
+        <div class="ct-section-title">Preset</div>
+
+        <label class="ct-item"><input type="checkbox" class="ct-checkbox" value="Creature_all"> Creature (all)</label>
+        <label class="ct-item"><input type="checkbox" class="ct-checkbox" value="Creature_only"> Creature (only)</label>
+
+        {% for t in [
+         'Evolution Creature','Spell','Tamaseed','Field','GR','Dragheart','Psychic',
+         'Castle','Cross Gear','Aura','Duelist'
+        ] %}
+          <label class="ct-item"><input type="checkbox" class="ct-checkbox" value="{{ t }}"> {{ t }}</label>
+          {% endfor %}
+
+      <!-- other + opener -->
+          <div class="ct-other-row">
+            <label class="ct-item ct-other">
+              <input type="checkbox" class="ct-checkbox" value="other"> other
+            </label>
+            <button type="button" class="ct-mini-btn" id="ct-custom-toggle">
+              show custom ▸
+            </button>
+          </div>
+
+          <div class="ct-custom" id="ct-custom" hidden>
+            <div class="ct-section-title">Custom types (registered)</div>
+            <div class="ct-custom-grid">
+              {% for dt in detail_types %}
+                <label class="ct-item">
+                  <input type="checkbox" class="ct-detail-checkbox" value="{{ dt }}">
+                  {{ dt }}
+                </label>
+              {% endfor %}
+              {% if not detail_types %}
+                <div class="ct-muted">No custom card types yet.</div>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="ct-actions">
+            <button type="button" class="ct-mini-btn" id="ct-clear">clear</button>
+            <button type="button" class="ct-mini-btn" id="ct-close">close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 文明アイコン -->
     <div style="margin: 15px 0;">
         <span>Civilization (Click on icons to select):</span>
@@ -288,6 +599,7 @@
              data-value="multi">
             Multicolored
         </div>
+        
     </div>
 
     <!-- OR / AND 切り替え -->
@@ -303,9 +615,14 @@
             AND
         </label>
     </div>
+ 
 
     <!-- 検索ボタン -->
-    <button type="submit">Search</button>
+    <div class="action-buttons">
+      <button type="submit" class="search-btn">Search</button>
+    </div>
+    <a class="reset-btn" href="{{ url_for('search') }}">Reset</a>
+
  </form>
 
 
@@ -320,25 +637,23 @@
         {% endfor %}
     </div>
 
-    <div style="margin-top: 20px;">
-     {% set args = request.args.to_dict() %}
+    <div class="pagination">
+      {% set args = request.args.to_dict() %}
+      {% set endpoint = request.endpoint %}
 
-     {% if has_prev %}
-       {% set args_prev = args.copy() %}
-       {% set _ = args_prev.update({'page': prev_num}) %}
-       <a href="{{ url_for('search', **args_prev) }}">« 前へ</a>
-     {% endif %}
-
-     <span>Page {{ page }} / {{ pages }}</span>
-
-     {% if has_next %}
-       {% set args_next = args.copy() %}
-       {% set _ = args_next.update({'page': next_num}) %}
-       <a href="{{ url_for('search', **args_next) }}">次へ »</a>
-     {% endif %}
-
+      {# Numbers only #}
+      {% for p in page_items %}
+        {% if p is none %}
+          <span class="page-ellipsis">…</span>
+        {% elif p == page %}
+          <span class="page-num current">{{ p }}</span>
+        {% else %}
+          {% set a = args.copy() %}
+          {% set _ = a.update({'page': p}) %}
+          <a class="page-num" href="{{ url_for(endpoint, **a) }}">{{ p }}</a>
+        {% endif %}
+      {% endfor %}
     </div>
-
 
 
 
@@ -393,6 +708,105 @@
           }
         });
       });
+
+
+      (function(){
+        const dd = document.getElementById('ct-dropdown');
+        if (!dd) return;
+
+        const trigger = document.getElementById('ct-trigger');
+        const panel = document.getElementById('ct-panel');
+        const triggerText = document.getElementById('ct-trigger-text');
+
+        const ctInput = document.getElementById('card-type-input');
+        const ctdInput = document.getElementById('card-type-detail-input');
+
+        const btnClose = document.getElementById('ct-close');
+        const btnClear = document.getElementById('ct-clear');
+
+        const btnCustom = document.getElementById('ct-custom-toggle');
+        const boxCustom = document.getElementById('ct-custom');
+
+        const selected = new Set((ctInput.value || '').split(',').filter(Boolean));
+        const selectedDetail = new Set((ctdInput.value || '').split(',').filter(Boolean));
+        updateTriggerText();
+        syncHidden();
+     
+
+        function syncHidden() {
+          ctInput.value = [...selected].join(',');
+          ctdInput.value = [...selectedDetail].join(',');
+        }
+
+        function updateTriggerText() {
+          const list = [...selected, ...selectedDetail];
+          if (list.length === 0) {
+            triggerText.textContent = 'Select...';
+            return;
+          }
+    // 表示が長くなりすぎるので省略
+          if (list.length <= 3) triggerText.textContent = list.join(', ');
+          else triggerText.textContent = list.slice(0, 2).join(', ') + ` +${list.length - 2}`;
+        }
+
+        function openPanel() { panel.hidden = false; }
+        function closePanel() { panel.hidden = true; }
+
+  // 初期チェック反映
+        document.querySelectorAll('.ct-checkbox').forEach(cb => {
+          cb.checked = selected.has(cb.value);
+          cb.addEventListener('change', () => {
+            if (cb.checked) selected.add(cb.value);
+            else selected.delete(cb.value);
+            syncHidden();
+            updateTriggerText();
+          });
+        });
+
+        document.querySelectorAll('.ct-detail-checkbox').forEach(cb => {
+          cb.checked = selectedDetail.has(cb.value);
+          cb.addEventListener('change', () => {
+            if (cb.checked) selectedDetail.add(cb.value);
+            else selectedDetail.delete(cb.value);
+            syncHidden();
+            updateTriggerText();
+          });
+        });
+
+  // 開閉
+        trigger.addEventListener('click', () => {
+          panel.hidden ? openPanel() : closePanel();
+        });
+
+        btnClose.addEventListener('click', closePanel);
+
+  // 外側クリックで閉じる
+        document.addEventListener('click', (e) => {
+          if (!dd.contains(e.target)) closePanel();
+        });
+
+  // custom toggle
+        if (btnCustom && boxCustom) {
+          btnCustom.addEventListener('click', () => {
+            boxCustom.hidden = !boxCustom.hidden;
+            btnCustom.textContent = boxCustom.hidden ? 'show custom ▸' : 'hide custom ▾';
+          });
+        }
+
+  // clear
+        btnClear.addEventListener('click', () => {
+          selected.clear();
+          selectedDetail.clear();
+          document.querySelectorAll('.ct-checkbox,.ct-detail-checkbox').forEach(cb => cb.checked = false);
+          syncHidden();
+          updateTriggerText();
+        });
+
+        updateTriggerText();
+    })();
+    
+
+
     </script>
 
   {% if session.get('admin') %}
@@ -400,9 +814,15 @@
   {% endif %}
   <!-- どこか本文内に置く -->
  <!-- テキスト＋アイコンの例 -->
+  <div class="feedback-box">
+    <div class="feedback-title">If you don't mind, please give me some feedback for the Google Form.</div>
+    <a class="feedback-url" href="https://forms.gle/DuLRXchCRM19hbRj6" target="_blank" rel="noopener noreferrer">
+      https://forms.gle/DuLRXchCRM19hbRj6
+    </a>
+  </div>
+
   <a class="x-link" href="https://x.com/unknow0627" target="_blank" rel="noopener noreferrer" aria-label="XでDM">
     <img class="x-logo" src="{{ url_for('static', filename='icons/x.png') }}" alt="X logo">
-    <span>Please DM me with your inquiries.</span>
   </a>
 
 
