@@ -86,7 +86,7 @@ def to_int(val):
     return int(s) if s.lstrip('-').isdigit() else None
 
 _NORM_PAT = re.compile(
-    r"[\s\u3000,，、。・!！?？()（）\[\]【】{}「」『』<>＜＞/／\\\-ー–—:;.'\"…]+"
+    r"[\s\u3000,，、。・!！?？()（）\[\]【】{}「」『』＝=<>＜＞/／\\\-ー–—:;.'\"…]+"
 )
 
 # 空白だけ消す（記号だけ検索用）
@@ -185,6 +185,18 @@ def normalize_image_url_for_env(image_url: str) -> str:
 
     return image_url
 
+REGULATION_LABELS = {
+    0: "Not Restricted",
+    1: "Restricted",
+    2: "Premium Restricted",
+    3: "Combo Restricted",
+}
+
+def get_regulation_label(value):
+    try:
+        return REGULATION_LABELS.get(int(value), "Unknown")
+    except (TypeError, ValueError):
+        return "Unknown"
 
 # 管理者認証デコレーター
 def admin_required(func):
@@ -253,7 +265,8 @@ def index():
         for c in paginated_cards:
             c["image_url"]  = normalize_image_url_for_env(c.get("image_url"))
             c["image_url2"] = normalize_image_url_for_env(c.get("image_url2"))
-
+            c["regulation_label"] = get_regulation_label(c.get("regulation_type"))
+            
         has_prev = page > 1
         has_next = end < total
         prev_num = page - 1
@@ -298,6 +311,8 @@ def search():
     selected_card_types = [x.strip() for x in card_types_raw.split(',') if x.strip()]
     card_types_detail_raw = request.args.get('card_type_detail', '')  # 例: "MyTypeA,MyTypeB"
     selected_detail_types = [x.strip() for x in card_types_detail_raw.split(',') if x.strip()]
+    regulation_type = request.args.get('regulation_type', type=int)
+    hof_only = request.args.get('hof_only') == '1'
     page = request.args.get('page', 1, type=int)
     per_page = 20
 
@@ -403,7 +418,17 @@ def search():
                 if tribe.lower() in (card.get('tribe') or '').lower()
             ]
 
+        if regulation_type is not None:
+            all_cards = [
+                card for card in all_cards
+                if to_int(card.get('regulation_type')) == regulation_type
+            ]
 
+        if hof_only:
+            all_cards = [
+                card for card in all_cards
+                if to_int(card.get('regulation_type')) not in (None, 0)
+            ]
         def is_multi(s: str) -> bool:
             return '/' in s if s else False
 
@@ -563,6 +588,10 @@ def search():
         end = start + per_page
         paginated_cards = all_cards[start:end]
 
+        for c in paginated_cards:
+            c["image_url"]  = normalize_image_url_for_env(c.get("image_url"))
+            c["image_url2"] = normalize_image_url_for_env(c.get("image_url2"))
+            c["regulation_label"] = get_regulation_label(c.get("regulation_type"))
 
         has_prev = page > 1
         has_next = end < total
@@ -635,6 +664,7 @@ def card_detail(id):
         if not card:
             abort(404)
         note_html = markdown.markdown(card.get('note') or '')
+        card["regulation_label"] = get_regulation_label(card.get("regulation_type"))
         return render_template('card_detail.html', card=card, note_html=note_html)
     except Exception as e:
         return f"カード取得エラー: {e}", 500
@@ -698,6 +728,7 @@ def upload_file():
         text_en          = request.form.get('text_en')
         power_raw        = request.form.get('power')         # ← 文字列
         tribe            = request.form.get('tribe')
+        regulation_type_raw = request.form.get('regulation_type', '0')
         illustrator      = request.form.get('illustrator')
         set_name         = request.form.get('set_name')
         note             = request.form.get('note')
@@ -724,6 +755,11 @@ def upload_file():
         file2 = request.files.get('file2')
         image_url = image_url2 = None
         image_public_id = image_public_id2 = None
+
+        try:
+            regulation_type = int(regulation_type_raw)
+        except (TypeError, ValueError):
+            regulation_type = 0
 
         def save_upload(f):
             if not f or not f.filename:
@@ -752,6 +788,7 @@ def upload_file():
           "text_en": text_en,
           "power": power,
           "tribe": tribe,
+          "regulation_type": regulation_type,
           "illustrator": illustrator,
           "set_name": set_name,
           "note": note,
@@ -803,6 +840,7 @@ def edit_card(id):
             "text_en": request.form.get('text_en'),
             "power": to_int(request.form.get('power')),
             "tribe": request.form.get('tribe'),
+            "regulation_type": to_int(request.form.get('regulation_type')) or 0,           
             "illustrator": request.form.get('illustrator'),
             "set_name": request.form.get('set_name'),
             "note": request.form.get('note'),

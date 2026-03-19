@@ -90,6 +90,14 @@
         <label>備考：</label><br>
         <textarea name="note">{{ card.note if card else '' }}</textarea><br>
 
+        <label>Regulation:</label><br>
+        <select name="regulation_type">
+            <option value="0" {% if (card.regulation_type|int) == 0 %}selected{% endif %}>0: Not Restricted</option>
+            <option value="1" {% if (card.regulation_type|int) == 1 %}selected{% endif %}>1: Restricted</option>
+            <option value="2" {% if (card.regulation_type|int) == 2 %}selected{% endif %}>2: Premium Restricted</option>
+            <option value="3" {% if (card.regulation_type|int) == 3 %}selected{% endif %}>3: Combo Restricted</option>
+        </select><br><br>
+
 
         <h3>ツインインパクトカード情報（任意）</h3>
 

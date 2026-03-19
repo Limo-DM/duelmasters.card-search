@@ -615,6 +615,15 @@
             AND
         </label>
     </div>
+
+    <!-- Only Hall of Fame フィルター -->
+    <div style="margin: 6px 0 10px; font-size: 0.82em; color: #555;">
+        <label style="cursor:pointer; display:inline-flex; align-items:center; gap:5px;">
+            <input type="checkbox" name="hof_only" value="1"
+                   {% if request.args.get('hof_only') == '1' %}checked{% endif %}>
+            <span>Only Hall of Fame</span>
+        </label>
+    </div>
  
 
     <!-- 検索ボタン -->

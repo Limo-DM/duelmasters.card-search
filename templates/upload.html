@@ -49,6 +49,14 @@
         <label>備考：</label><br>
         <textarea name="note">{{ card.note if card else '' }}</textarea><br>
 
+        <label>Regulation:</label><br>
+        <select name="regulation_type">
+            <option value="0">0: Not Restricted</option>
+            <option value="1">1: Restricted</option>
+            <option value="2">2: Premium Restricted</option>
+            <option value="3">3: Combo Restricted</option>
+        </select><br><br>
+
     
         <!-- ツインインパクトカード用 -->
         <h3>（任意）ツインインパクトカード情報</h3>
