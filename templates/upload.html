@@ -42,8 +42,8 @@
         <label>イラストレーター:</label><br>
         <textarea name="illustrator" rows="2" cols="50">{{ card.illustrator if card else '' }}</textarea><br>
 
-        <label>収録セット:</label><br>
-        <textarea name="set_name" rows="2" cols="50">{{ card.set_name if card else '' }}</textarea><br><br>
+        <label>Reference (URL):</label><br>
+        <input type="url" name="reference" value="{{ card.reference if card else '' }}" style="width: 400px;" placeholder="https://..."><br><br>
 
 
         <label>備考：</label><br>

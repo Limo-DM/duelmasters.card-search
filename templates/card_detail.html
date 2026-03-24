@@ -188,8 +188,11 @@
 
             <div class="section-block">
                 <p><strong>Illustrator:</strong> {{ card.illustrator }}</p>
-                <strong>Set and Rarity:</strong>
-                <div class="long-text">{{ card.set_name }}</div>
+                {% if card.reference %}
+                <p><strong>Reference:</strong>
+                    <a href="{{ card.reference }}" target="_blank" rel="noopener noreferrer">{{ card.reference }}</a>
+                </p>
+                {% endif %}
             </div>
 
             {% if card.note %}

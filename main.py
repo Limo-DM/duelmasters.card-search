@@ -226,7 +226,7 @@ class Card(db.Model):
     power = db.Column(db.Integer)
     tribe = db.Column(db.String(255))
     illustrator = db.Column(db.String(255))
-    set_name = db.Column(db.String(255))
+    reference = db.Column(db.String(512))
     note = db.Column(db.Text)
     twin_name_ja = db.Column(db.String(255))
     twin_name_ja_kana = db.Column(db.String(255))
@@ -377,7 +377,7 @@ def search():
                     card.get('illustrator'),
                     card.get('note'),
                     card.get('tribe'),
-                    card.get('set_name'),
+                    card.get('reference'),
                     card.get('twin_name_ja'),
                     card.get('twin_name_ja_kana'),
                     card.get('twin_name_en'),
@@ -691,7 +691,7 @@ def admin_dashboard():
                 f"text_ja.ilike.{pattern}",
                 f"text_en.ilike.{pattern}",
                 f"illustrator.ilike.{pattern}",
-                f"set_name.ilike.{pattern}",
+                f"reference.ilike.{pattern}",
             ])
             query = query.or_(or_filters)   # ← ここがポイント
 
@@ -730,7 +730,7 @@ def upload_file():
         tribe            = request.form.get('tribe')
         regulation_type_raw = request.form.get('regulation_type', '0')
         illustrator      = request.form.get('illustrator')
-        set_name         = request.form.get('set_name')
+        reference        = request.form.get('reference')
         note             = request.form.get('note')
 
         twin_name_ja         = request.form.get('twin_name_ja')
@@ -790,7 +790,7 @@ def upload_file():
           "tribe": tribe,
           "regulation_type": regulation_type,
           "illustrator": illustrator,
-          "set_name": set_name,
+          "reference": reference,
           "note": note,
           "twin_name_ja": twin_name_ja,
           "twin_name_ja_kana": twin_name_ja_kana,
@@ -842,7 +842,7 @@ def edit_card(id):
             "tribe": request.form.get('tribe'),
             "regulation_type": to_int(request.form.get('regulation_type')) or 0,           
             "illustrator": request.form.get('illustrator'),
-            "set_name": request.form.get('set_name'),
+            "reference": request.form.get('reference'),
             "note": request.form.get('note'),
             "twin_name_ja": request.form.get('twin_name_ja'),
             "twin_name_ja_kana": request.form.get('twin_name_ja_kana'),
