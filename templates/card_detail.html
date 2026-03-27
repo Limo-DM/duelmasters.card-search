@@ -65,7 +65,7 @@
         }
 
         .note-text {
-          color: red;
+          color: #111;
           font-weight: bold;
         }
 
@@ -107,6 +107,28 @@
               font-size: 1.4em;
             }
         }
+
+    /* ===== Twin カード名タイトル ===== */
+    .twin-name-block {
+        margin-bottom: 14px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #ccc;
+    }
+
+    .twin-name-ja {
+        font-size: 1.4em;
+        font-weight: bold;
+        color: #1a1a1a;
+        display: block;
+        margin-bottom: 2px;
+    }
+
+    .twin-name-en {
+        font-size: 1.1em;
+        font-weight: bold;
+        color: #444;
+        display: block;
+    }
 
     /* ===== Hall of Fame タイトルブロック ===== */
     .hof-title-block {
@@ -206,9 +228,13 @@
     {% if card.twin_name_ja %}
     <h3>▼ The other</h3>
     <div class="section-block">
-        <p><strong>Japanese:</strong> {{ card.twin_name_ja }}</p>
+        <div class="twin-name-block">
+            <span class="twin-name-ja">{{ card.twin_name_ja }}</span>
+            {% if card.twin_name_en %}
+            <span class="twin-name-en">{{ card.twin_name_en }}</span>
+            {% endif %}
+        </div>
         <p><strong>Japanese（読み）:</strong> {{ card.twin_name_ja_kana }}</p>
-        <p><strong>English:</strong> {{ card.twin_name_en }}</p>
         <p><strong>Card Type:</strong> {{ card.twin_card_type }}</p>
         <p><strong>Civilization:</strong> {{ card.twin_civilization }}</p>
         <p><strong>Cost:</strong> {{ card.twin_cost }}</p>
@@ -224,7 +250,7 @@
     {% endif %}
 
     <div style="margin-top: 20px; text-align:center;">
-        <a href="{{ url_for('index') }}">← 一覧に戻る</a>
+        <a href="{{ url_for('index') }}" id="back-to-search">← 一覧に戻る</a>
     </div>
 
     {% if session.get('admin') %}
@@ -238,6 +264,14 @@
         </div>
     {% endif %}
 </div>
+
+<script>
+    // 保存された検索URL があればリンク先に設定
+    const savedSearch = sessionStorage.getItem('lastSearchUrl');
+    if (savedSearch) {
+        document.getElementById('back-to-search').href = savedSearch;
+    }
+</script>
 
 </body>
 

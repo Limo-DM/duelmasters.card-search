@@ -313,6 +313,8 @@ def search():
     selected_detail_types = [x.strip() for x in card_types_detail_raw.split(',') if x.strip()]
     regulation_type = request.args.get('regulation_type', type=int)
     hof_only = request.args.get('hof_only') == '1'
+    search_in_raw = request.args.getlist('search_in')
+    search_in = search_in_raw if search_in_raw else ['name']
     page = request.args.get('page', 1, type=int)
     per_page = 20
 
@@ -366,26 +368,28 @@ def search():
         if query_text:
             qn = normalize_text(query_text)
 
-    # 検索対象のテキストを作る（通常）
+    # 検索対象のテキストを作る（search_in に従う）
             def card_blob_norm(card: dict) -> str:
-                parts = [
-                    card.get('name_ja'),
-                    card.get('name_ja_kana'),
-                    card.get('name_en'),
-                    card.get('text_ja'),
-                    card.get('text_en'),
-                    card.get('illustrator'),
-                    card.get('note'),
-                    card.get('tribe'),
-                    card.get('reference'),
-                    card.get('twin_name_ja'),
-                    card.get('twin_name_ja_kana'),
-                    card.get('twin_name_en'),
-                    card.get('twin_text_ja'),
-                    card.get('twin_text_en'),
-                    card.get('twin_tribe'),
-
-                ]
+                parts = []
+                if 'name' in search_in:
+                    parts += [
+                        card.get('name_ja'),
+                        card.get('name_ja_kana'),
+                        card.get('name_en'),
+                        card.get('twin_name_ja'),
+                        card.get('twin_name_ja_kana'),
+                        card.get('twin_name_en'),
+                    ]
+                if 'text' in search_in:
+                    parts += [
+                        card.get('text_ja'),
+                        card.get('text_en'),
+                        card.get('twin_text_ja'),
+                        card.get('twin_text_en'),
+                        card.get('note'),
+                    ]
+                if 'illustrator' in search_in:
+                    parts += [card.get('illustrator')]
                 joined = " ".join([p for p in parts if p])
                 return normalize_text(joined)
 
@@ -691,7 +695,6 @@ def admin_dashboard():
                 f"text_ja.ilike.{pattern}",
                 f"text_en.ilike.{pattern}",
                 f"illustrator.ilike.{pattern}",
-                f"reference.ilike.{pattern}",
             ])
             query = query.or_(or_filters)   # ← ここがポイント
 
