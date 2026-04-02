@@ -562,11 +562,55 @@
           margin: 12px 8px 0;
         }
     }
+
+/* ===== ユーザーバー ===== */
+    .user-bar {
+        position: absolute;
+        top: 14px;
+        right: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.85em;
+        color: #555;
+    }
+    .user-bar a {
+        color: #2b6cff;
+        text-decoration: none;
+        padding: 4px 10px;
+        border: 1px solid #2b6cff;
+        border-radius: 6px;
+        transition: background 0.2s, color 0.2s;
+    }
+    .user-bar a:hover {
+        background: #2b6cff;
+        color: #fff;
+    }
+    .user-bar .user-email {
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #444;
+    }
+    body { position: relative; }
+
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
 <body>
+    <!-- User login status bar -->
+    <div class="user-bar">
+        {% if current_user.is_authenticated %}
+            <span class="user-email">{{ current_user.email }}</span>
+            <a href="{{ url_for('user_logout') }}">Logout</a>
+        {% else %}
+            <a href="{{ url_for('user_login') }}">Login</a>
+            <a href="{{ url_for('user_signup') }}">Sign up</a>
+        {% endif %}
+    </div>
+
     <h1>Card Search</h1>
 
     <!-- 🔍 検索フォーム -->

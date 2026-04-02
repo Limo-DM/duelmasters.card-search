@@ -5,7 +5,10 @@ import logging
 import markdown
 import re
 import unicodedata
-from flask import Flask, request, render_template, redirect, url_for, send_from_directory, session, flash, abort
+import base64
+import hashlib
+import secrets
+from flask import Flask, request, render_template, redirect, url_for, send_from_directory, session, flash, abort, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import or_, and_, cast
 from sqlalchemy.types import Integer
@@ -208,6 +211,24 @@ def admin_required(func):
         return func(*args, **kwargs)
     return decorated_view
 
+# ユーザー認証デコレーター（将来のデッキビルダー等に使用）
+def login_required(func):
+    @wraps(func)
+    def decorated_view(*args, **kwargs):
+        if not session.get('user_id'):
+            flash('ログインが必要です')
+            return redirect(url_for('user_login'))
+        return func(*args, **kwargs)
+    return decorated_view
+
+# PKCE ヘルパー
+def _generate_pkce_pair():
+    """PKCE code_verifier と code_challenge を生成する"""
+    code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b'=').decode()
+    digest = hashlib.sha256(code_verifier.encode()).digest()
+    code_challenge = base64.urlsafe_b64encode(digest).rstrip(b'=').decode()
+    return code_verifier, code_challenge
+
 # カードモデル
 class Card(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -241,6 +262,17 @@ class Card(db.Model):
 
 with app.app_context():
     db.create_all()
+
+# ログインユーザー情報を全テンプレートに渡す
+@app.context_processor
+def inject_current_user():
+    return {
+        'current_user': {
+            'id': session.get('user_id'),
+            'email': session.get('user_email'),
+            'is_authenticated': bool(session.get('user_id')),
+        }
+    }
 
 @app.get("/__cors_test")
 def __cors_test():
@@ -901,6 +933,152 @@ def edit_card(id):
         return f"カード取得エラー: {e}", 500
 
 
+
+
+# ===== ユーザー認証ルート =====
+
+@app.route('/user/login', methods=['GET', 'POST'])
+def user_login():
+    if session.get('user_id'):
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip()
+        password = request.form.get('password', '')
+        if not email or not password:
+            flash('Please enter your email address and password.')
+            return render_template('user_login.html')
+        try:
+            res = supabase.auth.sign_in_with_password({"email": email, "password": password})
+            if res.user and res.session:
+                session['user_id'] = res.user.id
+                session['user_email'] = res.user.email
+                session['access_token'] = res.session.access_token
+                flash('You are now logged in.')
+                return redirect(url_for('index'))
+            else:
+                flash('Login failed. Please try again.')
+        except Exception as e:
+            app.logger.warning("Login error: %s", e)
+            flash('Incorrect email address or password.')
+    return render_template('user_login.html')
+
+
+@app.route('/user/signup', methods=['GET', 'POST'])
+def user_signup():
+    if session.get('user_id'):
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip()
+        password = request.form.get('password', '')
+        password2 = request.form.get('password2', '')
+        if not email or not password:
+            flash('Please enter your email address and password.')
+            return render_template('user_signup.html')
+        if password != password2:
+            flash('Passwords do not match.')
+            return render_template('user_signup.html')
+        if len(password) < 6:
+            flash('Password must be at least 6 characters.')
+            return render_template('user_signup.html')
+        try:
+            res = supabase.auth.sign_up({"email": email, "password": password})
+            if res.user:
+                flash('A confirmation email has been sent. Please check your inbox to activate your account.')
+                return redirect(url_for('user_login'))
+            else:
+                flash('Registration failed. Please try again.')
+        except Exception as e:
+            app.logger.warning("Signup error: %s", e)
+            flash(f'Registration failed: {e}')
+    return render_template('user_signup.html')
+
+
+@app.route('/user/logout')
+def user_logout():
+    try:
+        token = session.get('access_token')
+        if token:
+            supabase.auth.sign_out()
+    except Exception:
+        pass
+    session.pop('user_id', None)
+    session.pop('user_email', None)
+    session.pop('access_token', None)
+    flash('You have been logged out.')
+    return redirect(url_for('index'))
+
+
+@app.route('/user/google-login')
+def google_login():
+    """Google OAuth ログイン（PKCE フロー）"""
+    code_verifier, code_challenge = _generate_pkce_pair()
+    session['pkce_verifier'] = code_verifier
+
+    supabase_url = os.getenv("SUPABASE_URL", "").rstrip('/')
+    # コールバック先をホストに合わせて動的に生成
+    callback_url = request.url_root.rstrip('/') + '/auth/callback'
+
+    from urllib.parse import urlencode
+    params = {
+        "provider": "google",
+        "redirect_to": callback_url,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
+    }
+    oauth_url = f"{supabase_url}/auth/v1/authorize?" + urlencode(params)
+    return redirect(oauth_url)
+
+
+@app.route('/auth/callback')
+def auth_callback():
+    """Supabase OAuth コールバック"""
+    code = request.args.get('code')
+    error = request.args.get('error')
+
+    if error:
+        flash(f'Google sign-in was cancelled: {request.args.get("error_description", error)}')
+        return redirect(url_for('user_login'))
+
+    if code:
+        code_verifier = session.pop('pkce_verifier', None)
+        try:
+            params = {"auth_code": code}
+            if code_verifier:
+                params["code_verifier"] = code_verifier
+            res = supabase.auth.exchange_code_for_session(params)
+            if res.user and res.session:
+                session['user_id'] = res.user.id
+                session['user_email'] = res.user.email
+                session['access_token'] = res.session.access_token
+                flash('Signed in with Google.')
+                return redirect(url_for('index'))
+        except Exception as e:
+            app.logger.warning("OAuth callback error: %s", e)
+            flash('Google authentication failed. Please try again.')
+            return redirect(url_for('user_login'))
+
+    # コード無しの場合（フラグメントトークン対応）
+    return render_template('auth_callback.html')
+
+
+@app.route('/auth/set-session', methods=['POST'])
+def auth_set_session():
+    """JS経由でアクセストークンをサーバーセッションに保存する（implicit flowフォールバック）"""
+    data = request.get_json(silent=True) or {}
+    access_token = data.get('access_token') or request.form.get('access_token')
+    if not access_token:
+        return jsonify({'error': 'no token'}), 400
+    try:
+        user_res = supabase.auth.get_user(access_token)
+        if user_res and user_res.user:
+            session['user_id'] = user_res.user.id
+            session['user_email'] = user_res.user.email
+            session['access_token'] = access_token
+            return jsonify({'ok': True})
+    except Exception as e:
+        app.logger.warning("set-session error: %s", e)
+        return jsonify({'error': str(e)}), 400
+    return jsonify({'error': 'invalid token'}), 400
 
 
 @app.route('/admin/login', methods=['GET', 'POST'])
