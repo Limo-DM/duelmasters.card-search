@@ -193,6 +193,7 @@ REGULATION_LABELS = {
     1: "Restricted",
     2: "Premium Restricted",
     3: "Combo Restricted",
+    4: "Unlimited",
 }
 
 def get_regulation_label(value):
@@ -216,7 +217,7 @@ def login_required(func):
     @wraps(func)
     def decorated_view(*args, **kwargs):
         if not session.get('user_id'):
-            flash('ログインが必要です')
+            flash('Please log in to access this feature.')
             return redirect(url_for('user_login'))
         return func(*args, **kwargs)
     return decorated_view
@@ -266,11 +267,19 @@ with app.app_context():
 # ログインユーザー情報を全テンプレートに渡す
 @app.context_processor
 def inject_current_user():
+    user_id = session.get('user_id')
+    email = session.get('user_email', '')
+    username = ''
+    if user_id:
+        username = _get_username(user_id)
+        if not username:
+            username = email
     return {
         'current_user': {
-            'id': session.get('user_id'),
-            'email': session.get('user_email'),
-            'is_authenticated': bool(session.get('user_id')),
+            'id': user_id,
+            'email': email,
+            'username': username,
+            'is_authenticated': bool(user_id),
         }
     }
 
@@ -1156,6 +1165,1064 @@ def delete_image(id):
     return redirect(url_for('edit_card', id=id))
 
 
+# ===== デッキ機能ルート =====
+
+# Special カードの ID マッピング
+DORMAGEDDON_X_IDS = [403, 404, 405, 406, 407]
+ZERON_IDS = [398, 399, 400, 401, 402]
+DOKINDAM_X_ID = 270
+
+# カードタイプで超次元ゾーン判定に使うキーワード
+HYPERSPATIAL_KEYWORDS = ['dragheart', 'psychic', 'duelmate']
+GACHARANGE_KEYWORD = 'gacharange'
+# オリジナルで使えないカードタイプキーワード
+ORIGINAL_BANNED_KEYWORDS = ['dragheart', 'psychic', 'gacharange', 'duelmate',
+                            'final forbidden field', 'zeron nebula']
+
+
+@app.route('/deck/new')
+@login_required
+def deck_new():
+    """フォーマット選択ページ"""
+    return render_template('deck_format_select.html')
+
+
+@app.route('/deck/build')
+@login_required
+def deck_build():
+    """デッキ作成モードでカード検索"""
+    fmt = request.args.get('format', 'original')
+    if fmt not in ('original', 'advanced', 'free'):
+        fmt = 'original'
+    # Fetch detail_types (custom card types) for the Card Type dropdown
+    try:
+        _resp = supabase.table("Cards").select("card_type, twin_card_type").execute()
+        _all = _resp.data or []
+        import re as _re
+        import unicodedata as _uc
+        _space_p = _re.compile(r"\s+")
+        def _nct(s):
+            s = _uc.normalize("NFKC", (s or "")).strip().lower()
+            return _space_p.sub(" ", s)
+        _PRESET = {_nct(p) for p in ["Creature","Evolution Creature","Spell","Tamaseed","Field","GR","Dragheart","Psychic","Castle","Cross Gear","Aura","Duelist"]}
+        _dt_set = set()
+        for c in _all:
+            for k in ("card_type", "twin_card_type"):
+                v = _nct(c.get(k))
+                if v and v not in _PRESET:
+                    _dt_set.add(v)
+        detail_types = sorted(_dt_set, key=lambda x: x.lower())
+    except Exception:
+        detail_types = []
+    return render_template('deck_build.html', deck_format=fmt, detail_types=detail_types)
+
+
+@app.route('/api/cards')
+def api_cards():
+    """デッキ作成用: カード検索 API（JSON を返す）- full filter support"""
+    query_text = request.args.get('query', '').strip()
+    tribe = request.args.get('tribe', '').strip()
+    search_in_raw = request.args.getlist('search_in')
+    search_in = search_in_raw if search_in_raw else ['name']
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+
+    # Additional filters (same as /search)
+    civilizations_raw = request.args.get('civilization', '')
+    selected_civs = [c.strip() for c in civilizations_raw.split(',') if c.strip()]
+    color_mode = request.args.get('color_mode', 'all')
+    civ_mode = request.args.get('mode', 'or')
+    cost_min = request.args.get('cost_min', type=int)
+    cost_max = request.args.get('cost_max', type=int)
+    power_min = request.args.get('power_min', type=int)
+    power_max = request.args.get('power_max', type=int)
+    card_types_raw = request.args.get('card_type', '')
+    selected_card_types = [x.strip() for x in card_types_raw.split(',') if x.strip()]
+    card_types_detail_raw = request.args.get('card_type_detail', '')
+    selected_detail_types = [x.strip() for x in card_types_detail_raw.split(',') if x.strip()]
+    hof_only = request.args.get('hof_only') == '1'
+
+    try:
+        response = supabase.table("Cards").select("*").execute()
+        all_cards = response.data or []
+
+        # -- Text search --
+        if query_text:
+            qn = normalize_text(query_text)
+
+            def card_blob_norm(card: dict) -> str:
+                parts = []
+                if 'name' in search_in:
+                    parts += [card.get('name_ja'), card.get('name_ja_kana'), card.get('name_en'),
+                              card.get('twin_name_ja'), card.get('twin_name_ja_kana'), card.get('twin_name_en')]
+                if 'text' in search_in:
+                    parts += [card.get('text_ja'), card.get('text_en'),
+                              card.get('twin_text_ja'), card.get('twin_text_en'), card.get('note')]
+                if 'illustrator' in search_in:
+                    parts += [card.get('illustrator')]
+                joined = " ".join([p for p in parts if p])
+                return normalize_text(joined)
+
+            if qn:
+                all_cards = [c for c in all_cards if qn in card_blob_norm(c)]
+            else:
+                def card_blob_raw(card):
+                    parts = [card.get('name_ja'), card.get('name_en'),
+                             card.get('twin_name_ja'), card.get('twin_name_en'),
+                             card.get('name_ja_kana'), card.get('twin_name_ja_kana')]
+                    return normalize_keep_symbols(" ".join([p for p in parts if p]))
+                qraw = normalize_keep_symbols(query_text)
+                if qraw:
+                    all_cards = [c for c in all_cards if qraw in card_blob_raw(c)]
+
+        # -- Tribe --
+        if tribe:
+            all_cards = [c for c in all_cards if tribe.lower() in (c.get('tribe') or '').lower()]
+
+        # -- HoF only --
+        if hof_only:
+            all_cards = [c for c in all_cards if to_int(c.get('regulation_type')) not in (None, 0)]
+
+        # -- Civilization helpers (same as search()) --
+        def _is_multi(s): return '/' in s if s else False
+        def _is_mono(s): return (s or '') != '' and '/' not in s
+        def _civ_tokens(s):
+            if not s: return []
+            s = s.replace('／', '/')
+            return [p.strip() for p in s.split('/') if p.strip()]
+        def _field_matches(fv, target, cm):
+            if not fv: return False
+            if cm == 'mono' and not _is_mono(fv): return False
+            if cm == 'multi' and not _is_multi(fv): return False
+            tokens = _civ_tokens(fv)
+            t = target.lower()
+            return any(tok.lower() == t for tok in tokens) if tokens else (t in fv.lower())
+        def _card_matches_civ(card, target, cm):
+            return (_field_matches(card.get('civilization'), target, cm) or
+                    _field_matches(card.get('twin_civilization'), target, cm))
+
+        if selected_civs:
+            if civ_mode == 'and':
+                all_cards = [c for c in all_cards if all(_card_matches_civ(c, civ, color_mode) for civ in selected_civs)]
+            else:
+                all_cards = [c for c in all_cards if any(_card_matches_civ(c, civ, color_mode) for civ in selected_civs)]
+        elif color_mode in ('mono', 'multi'):
+            def _card_is_mono(card):
+                main = card.get('civilization') or ''; twin = card.get('twin_civilization') or ''
+                if _is_multi(main) or _is_multi(twin): return False
+                return bool(main or twin)
+            def _card_is_multi(card):
+                return _is_multi(card.get('civilization') or '') or _is_multi(card.get('twin_civilization') or '')
+            if color_mode == 'mono':
+                all_cards = [c for c in all_cards if _card_is_mono(c)]
+            else:
+                all_cards = [c for c in all_cards if _card_is_multi(c)]
+
+        # -- Card type --
+        _space = re.compile(r"\s+")
+        def _norm_ct(s):
+            s = unicodedata.normalize("NFKC", (s or "")).strip().lower()
+            return _space.sub(" ", s)
+        PRESET_NORMS_API = {_norm_ct(p) for p in ["Creature","Evolution Creature","Spell","Tamaseed","Field","GR","Dragheart","Psychic","Castle","Cross Gear","Aura","Duelist"]}
+        def _is_exact_preset(ct): return _norm_ct(ct) in PRESET_NORMS_API
+        def _ct_match_preset(card, token):
+            main = _norm_ct(card.get("card_type")); twin = _norm_ct(card.get("twin_card_type"))
+            def af(pred): return pred(main) or pred(twin)
+            if token == "Creature_all": return af(lambda s: "creature" in s)
+            if token == "Creature_only": return af(lambda s: s == "creature")
+            if token == "other": return af(lambda s: s != "" and not _is_exact_preset(s))
+            t = token.lower(); return af(lambda s: t in s)
+        def _ct_match_detail(card, detail):
+            d = _norm_ct(detail)
+            return _norm_ct(card.get("card_type")) == d or _norm_ct(card.get("twin_card_type")) == d
+
+        if selected_card_types or selected_detail_types:
+            all_cards = [c for c in all_cards if
+                         any(_ct_match_preset(c, t) for t in selected_card_types) or
+                         any(_ct_match_detail(c, d) for d in selected_detail_types)]
+
+        # -- Cost range --
+        if cost_min is not None or cost_max is not None:
+            def _in_cost(v):
+                if v is None: return False
+                if cost_min is not None and v < cost_min: return False
+                if cost_max is not None and v > cost_max: return False
+                return True
+            all_cards = [c for c in all_cards if _in_cost(to_int(c.get('cost'))) or _in_cost(to_int(c.get('twin_cost')))]
+
+        # -- Power range --
+        if power_min is not None:
+            all_cards = [c for c in all_cards if
+                         (to_int(c.get('power')) is not None and to_int(c.get('power')) >= power_min) or
+                         (to_int(c.get('twin_power')) is not None and to_int(c.get('twin_power')) >= power_min)]
+        if power_max is not None:
+            all_cards = [c for c in all_cards if
+                         (to_int(c.get('power')) is not None and to_int(c.get('power')) <= power_max) or
+                         (to_int(c.get('twin_power')) is not None and to_int(c.get('twin_power')) <= power_max)]
+
+        all_cards.sort(key=lambda c: c.get("id", 0), reverse=True)
+
+        total = len(all_cards)
+        start = (page - 1) * per_page
+        paginated = all_cards[start:start + per_page]
+
+        for c in paginated:
+            c["image_url"] = normalize_image_url_for_env(c.get("image_url"))
+            c["image_url2"] = normalize_image_url_for_env(c.get("image_url2"))
+            c["regulation_label"] = get_regulation_label(c.get("regulation_type"))
+
+        # Attach card group info to cards
+        paginated_ids = [c["id"] for c in paginated]
+        group_map = get_card_group_map(paginated_ids)
+        for c in paginated:
+            g = group_map.get(c["id"])
+            if g:
+                c["group_id"] = g["group_id"]
+                c["group_members"] = g["members"]
+                c["group_rep_image_url"] = g["rep_image_url"]
+            else:
+                c["group_id"] = None
+                c["group_members"] = []
+
+        pages = (total + per_page - 1) // per_page
+        return jsonify({"cards": paginated, "page": page, "pages": pages, "total": total})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ========== Card Group APIs ==========
+
+@app.route('/api/card_groups')
+@admin_required
+def api_card_groups_list():
+    """List all card groups with their members."""
+    try:
+        groups_res = supabase.table("card_groups").select("*").order("created_at", desc=True).execute()
+        groups = groups_res.data or []
+        if not groups:
+            return jsonify({"groups": []})
+        group_ids = [g["id"] for g in groups]
+        members_res = supabase.table("card_group_members").select("group_id, card_id, position").in_("group_id", group_ids).order("position").execute()
+        members = members_res.data or []
+        # Attach card info
+        card_ids = list(set(m["card_id"] for m in members))
+        cards_map = {}
+        if card_ids:
+            c_res = supabase.table("Cards").select("id, name_en, name_ja, image_url").in_("id", card_ids).execute()
+            for c in (c_res.data or []):
+                c["image_url"] = normalize_image_url_for_env(c.get("image_url"))
+                cards_map[c["id"]] = c
+        # Build groups with members
+        members_by_group = {}
+        for m in members:
+            gid = m["group_id"]
+            if gid not in members_by_group:
+                members_by_group[gid] = []
+            card_info = cards_map.get(m["card_id"], {})
+            members_by_group[gid].append({
+                "card_id": m["card_id"],
+                "position": m["position"],
+                "name": card_info.get("name_en") or card_info.get("name_ja") or str(m["card_id"]),
+                "image_url": card_info.get("image_url") or "",
+            })
+        for g in groups:
+            g["members"] = members_by_group.get(g["id"], [])
+        return jsonify({"groups": groups})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/card_groups', methods=['POST'])
+@admin_required
+def api_card_groups_create():
+    """Create a new card group."""
+    data = request.json or {}
+    card_ids = data.get("card_ids", [])
+    name = data.get("name", "")
+    if len(card_ids) < 2:
+        return jsonify({"error": "At least 2 cards required"}), 400
+    try:
+        g_res = supabase.table("card_groups").insert({"name": name}).execute()
+        group_id = g_res.data[0]["id"]
+        rows = [{"group_id": group_id, "card_id": int(cid), "position": i} for i, cid in enumerate(card_ids)]
+        supabase.table("card_group_members").insert(rows).execute()
+        return jsonify({"ok": True, "group_id": group_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/card_groups/<int:group_id>', methods=['DELETE'])
+@admin_required
+def api_card_groups_delete(group_id):
+    """Delete a card group."""
+    try:
+        supabase.table("card_group_members").delete().eq("group_id", group_id).execute()
+        supabase.table("card_groups").delete().eq("id", group_id).execute()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+def get_card_group_map(card_ids):
+    """For a list of card_ids, return a dict mapping card_id -> group info."""
+    if not card_ids:
+        return {}
+    try:
+        m_res = supabase.table("card_group_members").select("group_id, card_id, position").in_("card_id", [int(c) for c in card_ids]).execute()
+        members = m_res.data or []
+        if not members:
+            return {}
+        group_ids = list(set(m["group_id"] for m in members))
+        all_members_res = supabase.table("card_group_members").select("group_id, card_id, position").in_("group_id", group_ids).order("position").execute()
+        all_members = all_members_res.data or []
+        all_card_ids = list(set(m["card_id"] for m in all_members))
+        cards_res = supabase.table("Cards").select("id, name_en, name_ja, image_url, image_url2").in_("id", all_card_ids).execute()
+        cards_map = {}
+        for c in (cards_res.data or []):
+            c["image_url"] = normalize_image_url_for_env(c.get("image_url"))
+            c["image_url2"] = normalize_image_url_for_env(c.get("image_url2"))
+            cards_map[c["id"]] = c
+        members_by_group = {}
+        for m in all_members:
+            gid = m["group_id"]
+            if gid not in members_by_group:
+                members_by_group[gid] = []
+            card_info = cards_map.get(m["card_id"], {})
+            members_by_group[gid].append({
+                "card_id": m["card_id"],
+                "position": m["position"],
+                "name": card_info.get("name_en") or card_info.get("name_ja") or str(m["card_id"]),
+                "image_url": card_info.get("image_url") or "",
+                "image_url2": card_info.get("image_url2") or None,
+            })
+        # Build result: card_id -> {group_id, members, rep_image}
+        result = {}
+        for m in members:
+            cid = m["card_id"]
+            gid = m["group_id"]
+            group_members = members_by_group.get(gid, [])
+            rep = group_members[0] if group_members else {}
+            result[cid] = {
+                "group_id": gid,
+                "rep_image_url": rep.get("image_url") or "",
+                "rep_name": rep.get("name") or "",
+                "members": group_members,
+            }
+        return result
+    except Exception:
+        return {}
+
+
+@app.route('/api/deck/save', methods=['POST'])
+@login_required
+def api_deck_save():
+    """デッキ保存 API"""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'invalid data'}), 400
+
+    user_id = session.get('user_id')
+    deck_id = data.get('deck_id')  # 編集時は既存ID
+    name = (data.get('name') or 'Deck').strip()
+    fmt = data.get('format', 'original')
+    description = data.get('description', '')
+    cover_card_id = data.get('cover_card_id')
+    special_type = data.get('special_type')  # null / 'dormageddon_x' / 'zeron'
+    is_public = bool(data.get('is_public', False))
+    cards = data.get('cards', [])  # [{card_id, zone, quantity}, ...]
+
+    if fmt not in ('original', 'advanced', 'free'):
+        return jsonify({'error': 'invalid format'}), 400
+    if not name:
+        return jsonify({'error': 'deck name is required'}), 400
+    if special_type and special_type not in ('dormageddon_x', 'zeron'):
+        return jsonify({'error': 'invalid special_type'}), 400
+
+    try:
+        if deck_id:
+            # 既存デッキの更新
+            supabase.table("decks").update({
+                "name": name,
+                "format": fmt,
+                "description": description,
+                "cover_card_id": cover_card_id,
+                "special_type": special_type,
+                "is_public": is_public,
+                "updated_at": "now()",
+            }).eq("id", deck_id).eq("user_id", user_id).execute()
+
+            # 既存カードを削除して再挿入
+            supabase.table("deck_cards").delete().eq("deck_id", deck_id).execute()
+        else:
+            # 新規作成
+            res = supabase.table("decks").insert({
+                "user_id": user_id,
+                "name": name,
+                "format": fmt,
+                "description": description,
+                "cover_card_id": cover_card_id,
+                "special_type": special_type,
+                "is_public": is_public,
+            }).execute()
+            deck_id = res.data[0]["id"]
+
+        # カードを挿入
+        if cards:
+            rows = []
+            for c in cards:
+                row = {"deck_id": deck_id, "card_id": c["card_id"],
+                       "zone": c["zone"], "quantity": c["quantity"]}
+                if c.get("group_id"):
+                    row["group_id"] = int(c["group_id"])
+                rows.append(row)
+            supabase.table("deck_cards").insert(rows).execute()
+
+        return jsonify({"ok": True, "deck_id": deck_id})
+    except Exception as e:
+        app.logger.warning("Deck save error: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/print')
+def print_page():
+    """カード印刷ページ"""
+    return render_template('print.html')
+
+
+@app.route('/print/search')
+def print_search():
+    """印刷用カード検索ページ"""
+    try:
+        _resp = supabase.table("Cards").select("card_type, twin_card_type").execute()
+        _all = _resp.data or []
+        import re as _re
+        import unicodedata as _uc
+        _sp = _re.compile(r"\s+")
+        def _nct(s):
+            s = _uc.normalize("NFKC", (s or "")).strip().lower()
+            return _sp.sub(" ", s)
+        _PRESET = {_nct(p) for p in ["Creature","Evolution Creature","Spell","Tamaseed","Field","GR","Dragheart","Psychic","Castle","Cross Gear","Aura","Duelist"]}
+        _dt = set()
+        for c in _all:
+            for k in ("card_type", "twin_card_type"):
+                v = _nct(c.get(k))
+                if v and v not in _PRESET:
+                    _dt.add(v)
+        detail_types = sorted(_dt, key=lambda x: x.lower())
+    except Exception:
+        detail_types = []
+    return render_template('print_search.html', detail_types=detail_types)
+
+
+@app.route('/decks')
+def deck_list():
+    """デッキ閲覧ページ"""
+    return render_template('deck_list.html')
+
+
+@app.route('/api/decks')
+def api_deck_list():
+    """デッキ一覧 API"""
+    mode = request.args.get('mode', 'public')  # 'public' or 'my'
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    keyword = request.args.get('keyword', '').strip()
+    fmt_filter = request.args.get('format', '').strip()
+    card_keyword = request.args.get('card_keyword', '').strip()
+    date_from_str = request.args.get('date_from', '').strip()
+    date_to_str = request.args.get('date_to', '').strip()
+    civ_filter_str = request.args.get('civilizations', '').strip()
+    sort_by = request.args.get('sort_by', 'newest')  # 'newest' or 'likes'
+    filter_liked = request.args.get('filter_liked', '0') == '1'
+    filter_bookmarked = request.args.get('filter_bookmarked', '0') == '1'
+    # Search target flags (default: name and description checked)
+    st_name = request.args.get('st_name', '1') != '0'
+    st_desc = request.args.get('st_desc', '1') != '0'
+    st_card = request.args.get('st_card', '0') == '1'
+    st_username = request.args.get('st_username', '0') == '1'
+
+    # Parse civilization filter list
+    civ_filter = [c.strip() for c in civ_filter_str.split(',') if c.strip()] if civ_filter_str else []
+
+    # Parse date range (YYYY/MM/DD → ISO string prefix)
+    def parse_date(s):
+        """Convert YYYY/MM/DD to YYYY-MM-DD or return None"""
+        if not s:
+            return None
+        import re as _re
+        m = _re.match(r'^(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})$', s)
+        if m:
+            return '{}-{:02d}-{:02d}'.format(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        return None
+
+    date_from = parse_date(date_from_str)
+    date_to = parse_date(date_to_str)
+
+    # Canonical civilization names for detection
+    CANONICAL_CIVS = ['Fire', 'Water', 'Nature', 'Light', 'Darkness', 'Colorless']
+
+    def detect_civs_from_str(civ_str):
+        """Detect canonical civilizations from a civilization string."""
+        if not civ_str:
+            return []
+        s = civ_str.lower()
+        found = []
+        for civ in CANONICAL_CIVS:
+            if civ.lower() in s:
+                found.append(civ)
+        return found
+
+    def get_deck_civs(deck_cards_data, cards_data_map):
+        """Build deduplicated list of canonical civs for a deck."""
+        seen = set()
+        result = []
+        for dc in deck_cards_data:
+            card = cards_data_map.get(dc.get('card_id'))
+            if not card:
+                continue
+            for field in ['civilization', 'twin_civilization']:
+                civ_str = card.get(field) or ''
+                for civ in detect_civs_from_str(civ_str):
+                    if civ not in seen:
+                        seen.add(civ)
+                        result.append(civ)
+        return result
+
+    try:
+        if mode == 'my':
+            user_id = session.get('user_id')
+            if not user_id:
+                return jsonify({"decks": [], "page": 1, "pages": 0, "total": 0})
+            query = supabase.table("decks").select("*").eq("user_id", user_id)
+        else:
+            query = supabase.table("decks").select("*").eq("is_public", True)
+
+        query = query.order("created_at", desc=True)
+        response = query.execute()
+        all_decks = response.data or []
+
+        # Format filter
+        if fmt_filter:
+            all_decks = [d for d in all_decks if d.get('format') == fmt_filter]
+
+        # Date range filter (compare ISO date strings)
+        if date_from:
+            all_decks = [d for d in all_decks
+                         if d.get('created_at') and d['created_at'][:10] >= date_from]
+        if date_to:
+            all_decks = [d for d in all_decks
+                         if d.get('created_at') and d['created_at'][:10] <= date_to]
+
+        # Keyword filter (deck name / description / username)
+        # For username search, we need to fetch profiles first
+        username_map = {}  # user_id -> username (for all decks' owners)
+        if keyword and st_username:
+            owner_ids = list(set(d.get('user_id') for d in all_decks if d.get('user_id')))
+            username_map = _get_usernames_bulk(owner_ids)
+            # Fill default: email for users without a profile
+            # (we don't have email here, so blank stays blank - handled below)
+
+        if keyword and (st_name or st_desc or st_username):
+            kw = keyword.lower()
+            def deck_matches_kw(d):
+                if st_name and kw in (d.get('name') or '').lower():
+                    return True
+                if st_desc and kw in (d.get('description') or '').lower():
+                    return True
+                if st_username:
+                    uname = username_map.get(d.get('user_id'), '').lower()
+                    if kw in uname:
+                        return True
+                return False
+            all_decks = [d for d in all_decks if deck_matches_kw(d)]
+
+        # Card keyword filter: requires fetching deck cards + card names
+        # and/or civilization filter: also requires card data
+        # Do this in one pass if either is active
+        needs_card_data = bool(card_keyword and st_card) or bool(civ_filter)
+
+        # Build a set of deck IDs that pass card-level filters
+        passing_deck_ids = None  # None means "all pass"
+        deck_civs_map = {}  # deck_id -> list of canonical civs
+
+        if needs_card_data:
+            deck_ids = [d['id'] for d in all_decks]
+            if deck_ids:
+                # Fetch all deck_cards for these decks
+                dc_res = supabase.table("deck_cards").select("deck_id, card_id").in_("deck_id", deck_ids).execute()
+                all_dc = dc_res.data or []
+
+                # Build map: deck_id -> [card_ids]
+                deck_to_card_ids = {}
+                for dc in all_dc:
+                    did = dc['deck_id']
+                    deck_to_card_ids.setdefault(did, [])
+                    deck_to_card_ids[did].append(dc['card_id'])
+
+                # Fetch all card data needed
+                all_card_ids = list(set(dc['card_id'] for dc in all_dc))
+                cards_data_map = {}
+                if all_card_ids:
+                    card_fields = "id, name_en, twin_name_en, name_ja, name_ja_kana, twin_name_ja, twin_name_ja_kana, civilization, twin_civilization"
+                    cr = supabase.table("Cards").select(card_fields).in_("id", all_card_ids).execute()
+                    for c in (cr.data or []):
+                        cards_data_map[c['id']] = c
+
+                # Build deck-level civilizations and apply filters
+                passing_deck_ids = set()
+                for deck in all_decks:
+                    did = deck['id']
+                    dc_list = [{'card_id': cid} for cid in deck_to_card_ids.get(did, [])]
+                    civs = get_deck_civs(dc_list, cards_data_map)
+                    deck_civs_map[did] = civs
+
+                    # Civilization filter: deck must contain ALL selected civs
+                    if civ_filter:
+                        if not all(c in civs for c in civ_filter):
+                            continue
+
+                    # Card keyword filter
+                    if card_keyword and st_card:
+                        ckw = card_keyword.lower()
+                        card_ids_in_deck = deck_to_card_ids.get(did, [])
+                        found = False
+                        for cid in card_ids_in_deck:
+                            card = cards_data_map.get(cid)
+                            if not card:
+                                continue
+                            name_fields = [
+                                card.get('name_en'), card.get('twin_name_en'),
+                                card.get('name_ja'), card.get('name_ja_kana'),
+                                card.get('twin_name_ja'), card.get('twin_name_ja_kana'),
+                            ]
+                            if any(ckw in (f or '').lower() for f in name_fields):
+                                found = True
+                                break
+                        if not found:
+                            continue
+
+                    passing_deck_ids.add(did)
+
+                if passing_deck_ids is not None:
+                    all_decks = [d for d in all_decks if d['id'] in passing_deck_ids]
+
+        # Like/bookmark filters (only for logged-in users)
+        current_user_id = session.get('user_id')
+        user_liked_ids = set()
+        user_bookmarked_ids = set()
+        if current_user_id and all_decks:
+            all_deck_ids = [d['id'] for d in all_decks]
+            if filter_liked or filter_bookmarked or True:  # always fetch for badges
+                ul_res = supabase.table("deck_likes").select("deck_id").eq("user_id", current_user_id).in_("deck_id", all_deck_ids).execute()
+                user_liked_ids = {r['deck_id'] for r in (ul_res.data or [])}
+                ub_res = supabase.table("deck_bookmarks").select("deck_id").eq("user_id", current_user_id).in_("deck_id", all_deck_ids).execute()
+                user_bookmarked_ids = {r['deck_id'] for r in (ub_res.data or [])}
+
+        if filter_liked and current_user_id:
+            all_decks = [d for d in all_decks if d['id'] in user_liked_ids]
+        if filter_bookmarked and current_user_id:
+            all_decks = [d for d in all_decks if d['id'] in user_bookmarked_ids]
+
+        # Fetch like counts for all remaining decks
+        like_counts = {}
+        if all_decks:
+            remaining_ids = [d['id'] for d in all_decks]
+            lc_res = supabase.table("deck_likes").select("deck_id").in_("deck_id", remaining_ids).execute()
+            for r in (lc_res.data or []):
+                like_counts[r['deck_id']] = like_counts.get(r['deck_id'], 0) + 1
+
+        # Sort
+        if sort_by == 'likes':
+            all_decks.sort(key=lambda d: like_counts.get(d['id'], 0), reverse=True)
+        # else keep created_at desc (already ordered from DB)
+
+        total = len(all_decks)
+        start = (page - 1) * per_page
+        paginated = all_decks[start:start + per_page]
+
+        # Cover card image_url
+        cover_ids = [d['cover_card_id'] for d in paginated if d.get('cover_card_id')]
+        cover_map = {}
+        if cover_ids:
+            cres = supabase.table("Cards").select("id, image_url").in_("id", cover_ids).execute()
+            for c in (cres.data or []):
+                cover_map[c['id']] = normalize_image_url_for_env(c.get('image_url'))
+
+        # For decks not yet in deck_civs_map (when needs_card_data was false),
+        # compute civs now for the paginated set
+        if not needs_card_data:
+            paginated_ids = [d['id'] for d in paginated]
+            if paginated_ids:
+                dc_res = supabase.table("deck_cards").select("deck_id, card_id").in_("deck_id", paginated_ids).execute()
+                all_dc = dc_res.data or []
+                all_card_ids = list(set(dc['card_id'] for dc in all_dc))
+                cards_data_map = {}
+                if all_card_ids:
+                    cr = supabase.table("Cards").select("id, civilization, twin_civilization").in_("id", all_card_ids).execute()
+                    for c in (cr.data or []):
+                        cards_data_map[c['id']] = c
+                deck_to_card_ids = {}
+                for dc in all_dc:
+                    deck_to_card_ids.setdefault(dc['deck_id'], [])
+                    deck_to_card_ids[dc['deck_id']].append(dc['card_id'])
+                for deck in paginated:
+                    did = deck['id']
+                    dc_list = [{'card_id': cid} for cid in deck_to_card_ids.get(did, [])]
+                    deck_civs_map[did] = get_deck_civs(dc_list, cards_data_map)
+
+        # Fetch usernames for deck owners
+        paginated_owner_ids = list(set(d.get('user_id') for d in paginated if d.get('user_id')))
+        # Merge with already-fetched username_map (from username search above)
+        if paginated_owner_ids:
+            extra_map = _get_usernames_bulk(
+                [uid for uid in paginated_owner_ids if uid not in username_map]
+            )
+            username_map.update(extra_map)
+
+        for d in paginated:
+            d['cover_image_url'] = cover_map.get(d.get('cover_card_id'))
+            d['civilizations'] = deck_civs_map.get(d['id'], [])
+            owner_uname = username_map.get(d.get('user_id'), '')
+            d['creator_username'] = owner_uname if owner_uname else (d.get('user_id') or 'Unknown')
+            d['like_count'] = like_counts.get(d['id'], 0)
+            d['is_liked'] = d['id'] in user_liked_ids
+            d['is_bookmarked'] = d['id'] in user_bookmarked_ids
+
+        pages = (total + per_page - 1) // per_page
+        return jsonify({"decks": paginated, "page": page, "pages": pages, "total": total})
+    except Exception as e:
+        app.logger.warning("api_deck_list error: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/deck/<int:deck_id>/like', methods=['POST'])
+def api_deck_like(deck_id):
+    """いいねトグル API"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Login required"}), 401
+    try:
+        existing = supabase.table("deck_likes").select("id").eq("user_id", user_id).eq("deck_id", deck_id).execute()
+        if existing.data:
+            supabase.table("deck_likes").delete().eq("user_id", user_id).eq("deck_id", deck_id).execute()
+            liked = False
+        else:
+            supabase.table("deck_likes").insert({"user_id": user_id, "deck_id": deck_id}).execute()
+            liked = True
+        # Count current likes
+        cnt = supabase.table("deck_likes").select("id", count="exact").eq("deck_id", deck_id).execute()
+        like_count = cnt.count if hasattr(cnt, 'count') and cnt.count is not None else len(cnt.data or [])
+        return jsonify({"ok": True, "liked": liked, "like_count": like_count})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/deck/<int:deck_id>/bookmark', methods=['POST'])
+def api_deck_bookmark(deck_id):
+    """ブックマークトグル API"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Login required"}), 401
+    try:
+        existing = supabase.table("deck_bookmarks").select("id").eq("user_id", user_id).eq("deck_id", deck_id).execute()
+        if existing.data:
+            supabase.table("deck_bookmarks").delete().eq("user_id", user_id).eq("deck_id", deck_id).execute()
+            bookmarked = False
+        else:
+            supabase.table("deck_bookmarks").insert({"user_id": user_id, "deck_id": deck_id}).execute()
+            bookmarked = True
+        return jsonify({"ok": True, "bookmarked": bookmarked})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/deck/<int:deck_id>')
+def deck_detail(deck_id):
+    """デッキ詳細表示ページ"""
+    try:
+        # デッキ情報
+        dres = supabase.table("decks").select("*").eq("id", deck_id).single().execute()
+        deck = dres.data
+        if not deck:
+            abort(404)
+
+        # 公開チェック
+        user_id = session.get('user_id')
+        if not deck.get('is_public') and deck.get('user_id') != user_id:
+            abort(403)
+
+        # デッキ内のカード
+        cres = supabase.table("deck_cards").select("*").eq("deck_id", deck_id).execute()
+        deck_cards = cres.data or []
+
+        # カード情報を取得
+        card_ids = list(set([dc['card_id'] for dc in deck_cards]))
+        cards_map = {}
+        if card_ids:
+            cards_res = supabase.table("Cards").select("*").in_("id", card_ids).execute()
+            for c in (cards_res.data or []):
+                c["image_url"] = normalize_image_url_for_env(c.get("image_url"))
+                c["image_url2"] = normalize_image_url_for_env(c.get("image_url2"))
+                cards_map[c["id"]] = c
+
+        # Fetch group info for any group deck_cards
+        group_ids_in_deck = list(set(dc["group_id"] for dc in deck_cards if dc.get("group_id")))
+        group_detail_map = {}  # group_id -> {members: [...]}
+        if group_ids_in_deck:
+            gm_res = supabase.table("card_group_members").select("group_id, card_id, position").in_("group_id", group_ids_in_deck).order("position").execute()
+            gm_members = gm_res.data or []
+            all_group_card_ids = list(set(m["card_id"] for m in gm_members))
+            # Fetch any cards not already in cards_map
+            missing_ids = [cid for cid in all_group_card_ids if cid not in cards_map]
+            if missing_ids:
+                extra_res = supabase.table("Cards").select("*").in_("id", missing_ids).execute()
+                for c in (extra_res.data or []):
+                    c["image_url"] = normalize_image_url_for_env(c.get("image_url"))
+                    c["image_url2"] = normalize_image_url_for_env(c.get("image_url2"))
+                    cards_map[c["id"]] = c
+            for m in gm_members:
+                gid = m["group_id"]
+                if gid not in group_detail_map:
+                    group_detail_map[gid] = {"members": []}
+                card_info = cards_map.get(m["card_id"], {})
+                group_detail_map[gid]["members"].append({
+                    "card_id": m["card_id"],
+                    "position": m["position"],
+                    "image_url": card_info.get("image_url") or "",
+                    "image_url2": card_info.get("image_url2") or None,
+                    "name": card_info.get("name_en") or card_info.get("name_ja") or str(m["card_id"]),
+                })
+
+        is_owner = (user_id is not None and deck.get('user_id') == user_id)
+
+        # Fetch creator username
+        creator_user_id = deck.get('user_id')
+        creator_username = _get_username(creator_user_id) if creator_user_id else ''
+        if not creator_username and creator_user_id:
+            creator_username = creator_user_id  # fallback
+
+        # Build print list data for the Print Deck button
+        # For group cards, expand to all group member images
+        deck_print_json = []
+        for dc in deck_cards:
+            gid = dc.get("group_id")
+            if gid and gid in group_detail_map:
+                # Group card: print all members (qty times)
+                for member in group_detail_map[gid]["members"]:
+                    deck_print_json.append({
+                        'card_id': member['card_id'],
+                        'name': member['name'],
+                        'image_url': member['image_url'],
+                        'image_url2': member.get('image_url2') or None,
+                        'qty': dc.get('quantity', 1)
+                    })
+            else:
+                card = cards_map.get(dc['card_id'])
+                if card:
+                    deck_print_json.append({
+                        'card_id': card['id'],
+                        'name': card.get('name_en') or card.get('name_ja') or 'Unknown',
+                        'image_url': card.get('image_url') or '',
+                        'image_url2': card.get('image_url2') or None,
+                        'qty': dc.get('quantity', 1)
+                    })
+
+        return render_template('deck_detail.html', deck=deck, deck_cards=deck_cards,
+                               cards_map=cards_map, is_owner=is_owner,
+                               creator_username=creator_username,
+                               deck_print_json=deck_print_json,
+                               group_detail_map=group_detail_map)
+    except Exception as e:
+        return f"Deck error: {e}", 500
+
+
+@app.route('/api/deck/<int:deck_id>/load')
+@login_required
+def api_deck_load(deck_id):
+    """デッキ編集用: デッキデータをセッションストレージ形式で返す"""
+    user_id = session.get('user_id')
+    try:
+        dres = supabase.table("decks").select("*").eq("id", deck_id).eq("user_id", user_id).execute()
+        if not dres.data:
+            return jsonify({'error': 'Not found or not authorized'}), 404
+        deck = dres.data[0]
+
+        cres = supabase.table("deck_cards").select("*").eq("deck_id", deck_id).execute()
+        deck_cards = cres.data or []
+
+        card_ids = [dc['card_id'] for dc in deck_cards]
+        cards_map = {}
+        if card_ids:
+            cr = supabase.table("Cards").select(
+                "id, name_en, name_ja, image_url, card_type, twin_card_type, regulation_type, civilization"
+            ).in_("id", card_ids).execute()
+            for c in (cr.data or []):
+                c['image_url'] = normalize_image_url_for_env(c.get('image_url'))
+                cards_map[c['id']] = c
+
+        # Build deck.cards dict (same format as sessionStorage state)
+        # Fetch group info for any group deck_cards
+        load_group_ids = list(set(dc['group_id'] for dc in deck_cards if dc.get('group_id')))
+        load_group_detail = {}
+        if load_group_ids:
+            lgm_res = supabase.table("card_group_members").select("group_id, card_id, position").in_("group_id", load_group_ids).order("position").execute()
+            lgm_members = lgm_res.data or []
+            all_lg_cids = list(set(m['card_id'] for m in lgm_members))
+            missing = [cid for cid in all_lg_cids if cid not in cards_map]
+            if missing:
+                ex_res = supabase.table("Cards").select("id, name_en, name_ja, image_url, image_url2").in_("id", missing).execute()
+                for c in (ex_res.data or []):
+                    c['image_url'] = normalize_image_url_for_env(c.get('image_url'))
+                    cards_map[c['id']] = c
+            for m in lgm_members:
+                gid = m['group_id']
+                if gid not in load_group_detail:
+                    load_group_detail[gid] = []
+                ci = cards_map.get(m['card_id'], {})
+                load_group_detail[gid].append({
+                    'card_id': m['card_id'],
+                    'position': m['position'],
+                    'name': ci.get('name_en') or ci.get('name_ja') or str(m['card_id']),
+                    'image_url': ci.get('image_url') or '',
+                })
+
+        cards_dict = {}
+        for dc in deck_cards:
+            if dc['zone'] == 'special':
+                continue  # special zone handled via deck.special
+            gid = dc.get('group_id')
+            if gid and gid in load_group_detail:
+                members = load_group_detail[gid]
+                rep = members[0] if members else {}
+                gkey = 'G' + str(gid)
+                cards_dict[gkey] = {
+                    'zone': dc['zone'],
+                    'qty': dc['quantity'],
+                    'is_group': True,
+                    'group_id': gid,
+                    'group_members': members,
+                    'name_en': rep.get('name') or 'Group',
+                    'image_url': rep.get('image_url') or '',
+                    'card_type': '',
+                    'regulation_type': 0,
+                    'civilization': '',
+                }
+            else:
+                card = cards_map.get(dc['card_id'])
+                if not card:
+                    continue
+                cards_dict[str(dc['card_id'])] = {
+                    'zone': dc['zone'],
+                    'qty': dc['quantity'],
+                    'name_en': card.get('name_en') or card.get('name_ja') or 'Unknown',
+                    'image_url': card.get('image_url') or '',
+                    'card_type': card.get('card_type') or '',
+                    'regulation_type': card.get('regulation_type') or 0,
+                    'civilization': card.get('civilization') or '',
+                }
+
+        deck_state = {
+            'cards': cards_dict,
+            'special': deck.get('special_type'),
+            'deckId': deck_id,
+            # Pre-fill save modal fields when editing
+            'name': deck.get('name', 'Deck'),
+            'description': deck.get('description', ''),
+            'is_public': deck.get('is_public', False),
+            'cover_card_id': deck.get('cover_card_id'),
+        }
+
+        return jsonify({'ok': True, 'deck_state': deck_state, 'format': deck.get('format')})
+    except Exception as e:
+        app.logger.warning("api_deck_load error: %s", e)
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/deck/<int:deck_id>/delete', methods=['POST'])
+@login_required
+def api_deck_delete(deck_id):
+    """デッキ削除 API"""
+    user_id = session.get('user_id')
+    try:
+        # 所有権確認
+        dres = supabase.table("decks").select("id").eq("id", deck_id).eq("user_id", user_id).execute()
+        if not dres.data:
+            return jsonify({'error': 'Not found or not authorized'}), 404
+        # deck_cards は ON DELETE CASCADE で自動削除される
+        supabase.table("decks").delete().eq("id", deck_id).eq("user_id", user_id).execute()
+        return jsonify({'ok': True})
+    except Exception as e:
+        app.logger.warning("api_deck_delete error: %s", e)
+        return jsonify({'error': str(e)}), 500
+
+
+# ===== Profile API =====
+
+def _ensure_profile(user_id, email):
+    """Ensure a profile row exists for the user; create if missing."""
+    try:
+        res = supabase.table("profiles").select("user_id").eq("user_id", user_id).execute()
+        if not res.data:
+            supabase.table("profiles").insert({"user_id": user_id, "username": email or ""}).execute()
+    except Exception as e:
+        app.logger.warning("_ensure_profile error: %s", e)
+
+
+def _get_username(user_id):
+    """Return the username for a given user_id, or empty string."""
+    if not user_id:
+        return ""
+    try:
+        res = supabase.table("profiles").select("username").eq("user_id", user_id).execute()
+        if res.data:
+            return res.data[0].get("username") or ""
+    except Exception:
+        pass
+    return ""
+
+
+def _get_usernames_bulk(user_ids):
+    """Return {user_id: username} for a list of user_ids."""
+    if not user_ids:
+        return {}
+    try:
+        res = supabase.table("profiles").select("user_id, username").in_("user_id", list(user_ids)).execute()
+        return {r["user_id"]: (r.get("username") or "") for r in (res.data or [])}
+    except Exception:
+        return {}
+
+
+@app.route('/api/profile')
+@login_required
+def api_profile_get():
+    """Get current user's profile (username)."""
+    user_id = session.get('user_id')
+    email = session.get('user_email', '')
+    _ensure_profile(user_id, email)
+    username = _get_username(user_id)
+    # If username is blank, default to email
+    if not username:
+        username = email
+    return jsonify({'ok': True, 'username': username, 'email': email})
+
+
+@app.route('/api/profile/update', methods=['POST'])
+@login_required
+def api_profile_update():
+    """Update current user's username."""
+    user_id = session.get('user_id')
+    email = session.get('user_email', '')
+    data = request.get_json(force=True) or {}
+    username = (data.get('username') or '').strip()
+    if not username:
+        return jsonify({'error': 'Username cannot be empty'}), 400
+    try:
+        _ensure_profile(user_id, email)
+        supabase.table("profiles").update({"username": username, "updated_at": "now()"}).eq("user_id", user_id).execute()
+        return jsonify({'ok': True, 'username': username})
+    except Exception as e:
+        app.logger.warning("api_profile_update error: %s", e)
+        return jsonify({'error': str(e)}), 500
 
 
 

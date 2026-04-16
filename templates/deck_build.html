@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deck Builder ({{ deck_format|capitalize }}) - Duel Masters</title>
+<style>
+*{box-sizing:border-box;}
+body{font-family:Arial,sans-serif;margin:0;padding:12px 12px 80px;background:#fafafa;}
+h1{text-align:center;font-size:1.5em;margin:8px 0 4px;}
+.fmt-badge{display:inline-block;padding:3px 12px;border-radius:16px;font-size:.78em;font-weight:700;margin-bottom:10px;}
+.fmt-original{background:#e3f0ff;color:#2b6cff;}
+.fmt-advanced{background:#ffeaea;color:#d44;}
+.fmt-free{background:#e8f8e8;color:#2a9d2a;}
+.center{text-align:center;}
+
+/* === Search form === */
+:root{--border:#777;--border-hover:#555;--focus:#2b6cff;}
+.search-wrap{max-width:760px;margin:0 auto;}
+
+.search-row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:6px;}
+.search-row input[type=text]{width:460px;max-width:80vw;padding:9px 12px;border:2px solid var(--border);border-radius:10px;font-size:.95em;background:#fff;}
+.search-row input[type=text]:hover{border-color:var(--border-hover);}
+.search-row input[type=text]:focus{border-color:var(--focus);outline:none;box-shadow:0 0 0 3px rgba(43,108,255,.2);}
+
+/* Search targets */
+.search-targets{display:flex;justify-content:center;align-items:center;gap:16px;margin:4px 0 8px;flex-wrap:wrap;}
+.search-targets-label-text{font-size:.9em;color:#555;font-weight:600;}
+.search-target-cb{display:inline-flex;align-items:center;gap:5px;font-size:.9em;cursor:pointer;user-select:none;color:#222;}
+.search-target-cb input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:#111;}
+
+/* Detail toggle */
+.detail-toggle-btn{display:inline-flex;align-items:center;gap:8px;padding:7px 16px;border:2px solid var(--border);border-radius:10px;background:#f7f7f7;cursor:pointer;font-size:.88em;font-weight:600;transition:all .15s;}
+.detail-toggle-btn:hover{background:#eee;border-color:#555;}
+.detail-conditions{max-width:680px;margin:10px auto 0;border:2px solid #ddd;border-radius:14px;background:#fafafa;padding:4px 20px 14px;text-align:left;}
+.detail-section{padding:12px 0;border-bottom:1px solid #e8e8e8;}
+.detail-section:last-child{border-bottom:none;padding-bottom:2px;}
+.detail-section-title{font-size:.78em;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;}
+.detail-two-col{display:flex;gap:24px;flex-wrap:wrap;}
+.detail-sub{flex:1 1 200px;}
+.detail-sub-title{font-size:.78em;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;}
+.range-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.range-sep{color:#888;font-size:1.1em;}
+input.small-input{width:100px;height:34px;font-size:.88em;padding:4px 8px;border:2px solid var(--border);border-radius:8px;background:#fff;}
+input.small-input:hover{border-color:var(--border-hover);}
+input.small-input:focus{border-color:var(--focus);outline:none;box-shadow:0 0 0 3px rgba(43,108,255,.2);}
+input[type=number].small-input{width:90px;}
+
+/* Civilization icons */
+#civilization-selection{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:8px 0;}
+.civ-wrapper{display:flex;flex-direction:column;align-items:center;width:60px;}
+.civilization-icon{width:52px;height:52px;background-size:cover;background-position:center;border:2px solid var(--border);border-radius:10px;transition:transform .2s,border-color .2s;cursor:pointer;background-color:#f2f2f2;}
+.civilization-icon:hover{transform:scale(1.05);border-color:#888;}
+.civilization-icon.selected{border-color:#ff4444;box-shadow:0 0 8px rgba(255,80,80,.6);}
+.civ-label{font-size:.75em;margin-top:3px;text-align:center;}
+
+#color-mode-selection{display:flex;justify-content:center;gap:16px;margin:8px 0;flex-wrap:wrap;}
+.color-mode-icon{padding:6px 14px;border:2px solid var(--border);border-radius:10px;cursor:pointer;user-select:none;transition:all .2s;font-size:.88em;}
+.color-mode-icon.selected{border-color:#ff4444;background-color:#ffeaea;font-weight:bold;}
+
+.radio-group{display:flex;justify-content:center;gap:24px;margin-top:8px;}
+
+/* Card Type dropdown */
+.ct-wrap{margin:4px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-start;}
+.ct-dropdown{position:relative;min-width:220px;}
+.ct-trigger{width:280px;max-width:80vw;padding:8px 10px;border:2px solid var(--border);border-radius:8px;background:#fff;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-size:.88em;}
+.ct-trigger:hover{border-color:var(--border-hover);}
+.ct-caret{opacity:.7;}
+.ct-panel{position:absolute;z-index:999;top:calc(100% + 4px);left:0;width:320px;max-width:88vw;max-height:300px;overflow:auto;background:#fff;border:2px solid var(--border);border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.12);padding:8px;}
+.ct-section-title{font-size:11px;opacity:.75;margin:4px 0 6px;font-weight:600;}
+.ct-item{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:8px;cursor:pointer;user-select:none;font-size:.88em;}
+.ct-item:hover{background:rgba(0,0,0,.04);}
+.ct-other-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px;}
+.ct-mini-btn{padding:5px 9px;border:1px solid #bbb;border-radius:8px;background:#fff;cursor:pointer;font-size:.8em;}
+.ct-mini-btn:hover{border-color:#888;}
+.ct-custom{margin-top:8px;padding-top:6px;border-top:1px dashed #ccc;}
+.ct-custom-grid{display:flex;flex-wrap:wrap;gap:4px 8px;}
+.ct-muted{color:#666;padding:4px;font-size:.85em;}
+.ct-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px;}
+
+/* Action buttons */
+.action-buttons{display:flex;justify-content:center;align-items:center;gap:12px;margin:12px 0 6px;}
+.search-btn{padding:10px 40px;font-size:1em;border:none;border-radius:10px;background:#2b6cff;color:#fff;font-weight:700;cursor:pointer;}
+.search-btn:hover{background:#1a55d0;}
+
+/* === Card grid === */
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;max-width:900px;margin:0 auto;}
+.card-cell{text-align:center;position:relative;}
+.card-cell img{width:100%;border-radius:6px;border:1px solid #ccc;cursor:pointer;}
+.card-cell .card-name{font-size:.75em;margin:2px 0;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+.qty-row{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px;}
+.qty-btn{width:28px;height:28px;border:1px solid #aaa;border-radius:6px;background:#fff;cursor:pointer;font-size:1.1em;display:flex;align-items:center;justify-content:center;transition:background .15s;}
+.qty-btn:hover{background:#eee;}
+.qty-btn:active{background:#ddd;}
+.qty-val{font-size:.85em;min-width:18px;text-align:center;font-weight:700;}
+
+/* === Floating deck icon === */
+.deck-fab{position:fixed;bottom:20px;right:20px;z-index:900;width:56px;height:56px;border-radius:50%;background:#2b6cff;color:#fff;border:none;cursor:pointer;box-shadow:0 3px 12px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;font-size:1.1em;font-weight:700;transition:transform .15s;}
+.deck-fab:hover{transform:scale(1.08);}
+
+/* === Right panel === */
+.deck-panel-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:1000;}
+.deck-panel-overlay.open{display:block;}
+.deck-panel{position:fixed;top:0;right:-360px;width:340px;max-width:90vw;height:100%;background:#fff;z-index:1100;box-shadow:-2px 0 16px rgba(0,0,0,.15);transition:right .25s;display:flex;flex-direction:column;}
+.deck-panel.open{right:0;}
+.dp-header{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid #eee;}
+.dp-header h2{margin:0;font-size:1.1em;}
+.dp-close{background:none;border:none;font-size:24px;cursor:pointer;color:#666;}
+.dp-body{flex:1;overflow-y:auto;padding:10px 16px;}
+.dp-footer{padding:12px 16px;border-top:1px solid #eee;display:flex;gap:10px;}
+.dp-footer button{flex:1;padding:10px;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:.95em;}
+.btn-save{background:#2b6cff;color:#fff;}
+.btn-save:hover{background:#1a55d0;}
+.btn-back-fmt{background:#eee;color:#333;}
+.btn-back-fmt:hover{background:#ddd;}
+
+.zone-title{font-size:.82em;font-weight:700;color:#888;margin:12px 0 6px;text-transform:uppercase;border-bottom:1px solid #eee;padding-bottom:4px;}
+.dp-card-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f5f5f5;}
+.dp-card-name{flex:1;font-size:.82em;cursor:pointer;color:#2b6cff;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dp-card-name:hover{text-decoration:underline;}
+.dp-qty-btn{width:24px;height:24px;border:1px solid #bbb;border-radius:4px;background:#fff;cursor:pointer;font-size:.9em;display:flex;align-items:center;justify-content:center;}
+.dp-qty-btn:hover{background:#eee;}
+.dp-qty{font-size:.82em;min-width:14px;text-align:center;font-weight:700;}
+.dp-trash{background:none;border:none;cursor:pointer;font-size:1em;color:#c44;padding:2px;}
+.dp-trash:hover{color:#a00;}
+
+.special-section{margin-top:10px;padding:10px;background:#f9f9f9;border-radius:8px;}
+.special-section label{display:block;padding:4px 0;font-size:.85em;cursor:pointer;}
+.special-section input[type=radio]{margin-right:6px;}
+
+/* === Save modal === */
+.save-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:2000;align-items:center;justify-content:center;}
+.save-overlay.open{display:flex;}
+.save-modal{background:#fff;border-radius:14px;padding:28px 24px;width:400px;max-width:90vw;box-shadow:0 6px 30px rgba(0,0,0,.2);}
+.save-modal h2{margin:0 0 16px;font-size:1.2em;}
+.save-modal label{display:block;font-size:.85em;font-weight:700;color:#444;margin-bottom:4px;}
+.save-modal input[type=text],.save-modal textarea{width:100%;padding:8px 10px;border:1px solid #ccc;border-radius:8px;font-size:.9em;margin-bottom:12px;box-sizing:border-box;}
+.save-modal textarea{height:80px;resize:vertical;}
+.save-modal .toggle-row{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
+.save-modal .toggle-row input{width:18px;height:18px;}
+.save-btns{display:flex;gap:10px;}
+.save-btns button{flex:1;padding:10px;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:.95em;}
+
+/* Pagination */
+.pagination{display:flex;justify-content:center;gap:6px;margin:16px 0;flex-wrap:wrap;}
+.pagination a,.pagination span{padding:6px 11px;border-radius:6px;font-size:.85em;text-decoration:none;}
+.pagination a{border:1px solid #bbb;color:#333;}
+.pagination a:hover{background:#eee;}
+.pagination .current{background:#2b6cff;color:#fff;border:1px solid #2b6cff;}
+
+.cover-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:12px;max-height:200px;overflow-y:auto;}
+.cover-grid img{width:100%;border:2px solid transparent;border-radius:4px;cursor:pointer;}
+.cover-grid img.selected{border-color:#2b6cff;}
+.cover-grid img:hover{border-color:#aaa;}
+
+.deck-warning{background:#fff3cd;border:1px solid #ffc107;padding:6px 12px;border-radius:6px;font-size:.82em;color:#856404;text-align:center;margin-bottom:8px;}
+
+@media(max-width:600px){
+    .card-grid{grid-template-columns:repeat(2,1fr);}
+    .deck-panel{width:100%;right:-100%;}
+    .search-row input[type=text]{width:100%;}
+    .detail-conditions{margin:10px 4px 0;}
+}
+
+/* ===== Hamburger menu ===== */
+.hamburger-btn{position:fixed;top:14px;right:18px;z-index:1100;background:#fff;border:1px solid #ccc;border-radius:8px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:22px;color:#333;box-shadow:0 1px 6px rgba(0,0,0,.10);transition:background .2s;line-height:1;}
+.hamburger-btn:hover{background:#f0f0f0;}
+.nav-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:1200;}
+.nav-overlay.open{display:block;}
+.nav-drawer{position:fixed;top:0;right:-280px;width:270px;height:100%;background:#fff;z-index:1300;box-shadow:-2px 0 16px rgba(0,0,0,.15);transition:right .25s ease;display:flex;flex-direction:column;padding:20px 0;}
+.nav-drawer.open{right:0;}
+.nav-drawer-close{align-self:flex-end;background:none;border:none;font-size:24px;cursor:pointer;padding:0 20px 10px;color:#666;}
+.nav-drawer .nav-user{padding:8px 24px 16px;font-size:.85em;color:#888;border-bottom:1px solid #eee;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.nav-drawer a{display:block;padding:13px 24px;color:#333;text-decoration:none;font-size:.95em;transition:background .15s;}
+.nav-drawer a:hover{background:#f5f5f5;}
+.nav-drawer .nav-sep{height:1px;background:#eee;margin:8px 16px;}
+</style>
+</head>
+<body>
+
+<!-- Hamburger menu -->
+<button class="hamburger-btn" id="hamburger-btn" aria-label="Menu">&#9776;</button>
+<div class="nav-overlay" id="nav-overlay"></div>
+<nav class="nav-drawer" id="nav-drawer">
+    <button class="nav-drawer-close" id="nav-drawer-close">&times;</button>
+    {% if current_user.is_authenticated %}
+        <div class="nav-user" id="nav-username-display">{{ current_user.username or current_user.email }}</div>
+        <a href="/">Card Search</a>
+        <a href="{{ url_for('deck_new') }}">Deck Builder</a>
+        <a href="{{ url_for('deck_list') }}">Browse Decks</a>
+        <a href="{{ url_for('print_page') }}">Card Print</a>
+        <div class="nav-sep"></div>
+        <a href="#" id="nav-profile-btn">Profile</a>
+        <a href="{{ url_for('user_logout') }}">Logout</a>
+    {% else %}
+        <a href="/">Card Search</a>
+        <a href="{{ url_for('deck_list') }}">Browse Decks</a>
+        <a href="{{ url_for('print_page') }}">Card Print</a>
+        <div class="nav-sep"></div>
+        <a href="{{ url_for('user_login') }}">Login</a>
+        <a href="{{ url_for('user_signup') }}">Sign up</a>
+    {% endif %}
+</nav>
+
+{% if current_user.is_authenticated %}
+<!-- Profile modal -->
+<div class="profile-modal-overlay" id="profile-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:2500;"></div>
+<div id="profile-modal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;padding:28px 28px 20px;width:340px;max-width:92vw;z-index:2600;box-shadow:0 8px 32px rgba(0,0,0,.18);">
+    <h3 style="margin:0 0 16px;font-size:1.1em;">Profile</h3>
+    <label style="font-size:.88em;color:#555;display:block;margin-bottom:4px;">Username</label>
+    <input id="profile-username-input" type="text" style="width:100%;padding:9px 12px;border:1.5px solid #bbb;border-radius:8px;font-size:.95em;box-sizing:border-box;margin-bottom:12px;" placeholder="Enter username">
+    <div id="profile-msg" style="font-size:.82em;min-height:18px;margin-bottom:10px;"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button id="profile-cancel-btn" style="padding:8px 20px;border:1px solid #bbb;border-radius:8px;background:#f5f5f5;cursor:pointer;font-size:.9em;">Cancel</button>
+        <button id="profile-save-btn" style="padding:8px 20px;border:none;border-radius:8px;background:#2b6cff;color:#fff;font-weight:700;cursor:pointer;font-size:.9em;">Save</button>
+    </div>
+</div>
+{% endif %}
+
+<h1>Deck Builder</h1>
+<div class="center">
+    <span class="fmt-badge fmt-{{ deck_format }}">{{ deck_format|capitalize }}</span>
+</div>
+
+<!-- ===== Search form ===== -->
+<div class="search-wrap">
+    <!-- Text input only (no button here – use the Search button below) -->
+    <div class="search-row">
+        <input type="text" id="search-input" placeholder="Search cards...">
+    </div>
+
+    <div class="search-targets">
+        <span class="search-targets-label-text">Search in:</span>
+        <label class="search-target-cb"><input type="checkbox" id="st-name" checked> Name</label>
+        <label class="search-target-cb"><input type="checkbox" id="st-text"> Text</label>
+        <label class="search-target-cb"><input type="checkbox" id="st-illustrator"> Illustrator</label>
+    </div>
+
+    <div style="text-align:center;">
+        <button type="button" class="detail-toggle-btn" id="detail-toggle-btn">
+            <span id="detail-toggle-arrow">▼</span> Detailed conditions
+        </button>
+    </div>
+
+    <div class="detail-conditions" id="detail-conditions" hidden>
+        <!-- Civilization -->
+        <div class="detail-section">
+            <div class="detail-section-title">Civilization</div>
+            <div id="civilization-selection">
+                {% for civ in ['Fire','Water','Nature','Light','Darkness','Colorless'] %}
+                <div class="civ-wrapper">
+                    <div class="civilization-icon"
+                         style="background-image:url('/static/icons/{{ civ|lower }}.png');"
+                         data-value="{{ civ }}" title="{{ civ }}"></div>
+                    <div class="civ-label">{{ civ }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            <div id="color-mode-selection">
+                <div class="color-mode-icon" data-value="mono">Monocolored</div>
+                <div class="color-mode-icon" data-value="multi">Multicolored</div>
+            </div>
+            <div class="radio-group">
+                <label><input type="radio" name="civ-mode" id="civ-or" value="or" checked> OR</label>
+                <label><input type="radio" name="civ-mode" id="civ-and" value="and"> AND</label>
+            </div>
+        </div>
+
+        <!-- Card Type + Race -->
+        <div class="detail-section">
+            <div class="detail-two-col">
+                <div class="detail-sub">
+                    <div class="detail-sub-title">Card Type</div>
+                    <div class="ct-dropdown" id="ct-dropdown">
+                        <button type="button" class="ct-trigger" id="ct-trigger">
+                            <span id="ct-trigger-text">Select...</span>
+                            <span class="ct-caret">▾</span>
+                        </button>
+                        <div class="ct-panel" id="ct-panel" hidden>
+                            <div class="ct-section-title">Preset</div>
+                            <label class="ct-item"><input type="checkbox" class="ct-checkbox" value="Creature_all"> Creature (all)</label>
+                            <label class="ct-item"><input type="checkbox" class="ct-checkbox" value="Creature_only"> Creature (only)</label>
+                            {% for t in ['Evolution Creature','Spell','Tamaseed','Field','GR','Dragheart','Psychic','Castle','Cross Gear','Aura','Duelist'] %}
+                            <label class="ct-item"><input type="checkbox" class="ct-checkbox" value="{{ t }}"> {{ t }}</label>
+                            {% endfor %}
+                            <div class="ct-other-row">
+                                <label class="ct-item ct-other"><input type="checkbox" class="ct-checkbox" value="other"> other</label>
+                                <button type="button" class="ct-mini-btn" id="ct-custom-toggle">show custom ▸</button>
+                            </div>
+                            <div class="ct-custom" id="ct-custom" hidden>
+                                <div class="ct-section-title">Custom types</div>
+                                <div class="ct-custom-grid">
+                                    {% for dt in detail_types %}
+                                    <label class="ct-item"><input type="checkbox" class="ct-detail-checkbox" value="{{ dt }}"> {{ dt }}</label>
+                                    {% endfor %}
+                                    {% if not detail_types %}<div class="ct-muted">No custom types.</div>{% endif %}
+                                </div>
+                            </div>
+                            <div class="ct-actions">
+                                <button type="button" class="ct-mini-btn" id="ct-clear">clear</button>
+                                <button type="button" class="ct-mini-btn" id="ct-close">close</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="detail-sub">
+                    <div class="detail-sub-title">Race</div>
+                    <input type="text" class="small-input" id="tribe-input" placeholder="e.g. Dragon">
+                </div>
+            </div>
+        </div>
+
+        <!-- Cost + Power -->
+        <div class="detail-section">
+            <div class="detail-two-col">
+                <div class="detail-sub">
+                    <div class="detail-sub-title">Cost</div>
+                    <div class="range-row">
+                        <input type="number" class="small-input" id="cost-min" placeholder="MIN">
+                        <span class="range-sep">～</span>
+                        <input type="number" class="small-input" id="cost-max" placeholder="MAX">
+                    </div>
+                </div>
+                <div class="detail-sub">
+                    <div class="detail-sub-title">Power</div>
+                    <div class="range-row">
+                        <input type="number" class="small-input" id="power-min" placeholder="MIN">
+                        <span class="range-sep">～</span>
+                        <input type="number" class="small-input" id="power-max" placeholder="MAX">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="detail-section" style="padding:8px 0 2px;">
+            <label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:.82em;color:#555;">
+                <input type="checkbox" id="hof-only"> Only Hall of Fame
+            </label>
+        </div>
+    </div>
+
+    <div class="action-buttons">
+        <button type="button" class="search-btn" id="do-search">Search</button>
+    </div>
+</div>
+
+<div class="card-grid" id="card-grid"></div>
+<div class="pagination" id="pagination"></div>
+
+<!-- FAB -->
+<button class="deck-fab" id="deck-fab" title="View deck">
+    <span>&#x1F0CF;</span>
+    <span id="fab-count" style="position:absolute;top:-4px;right:-4px;background:#ff4444;color:#fff;border-radius:50%;width:22px;height:22px;font-size:.7em;display:flex;align-items:center;justify-content:center;">0</span>
+</button>
+
+<!-- Right panel -->
+<div class="deck-panel-overlay" id="panel-overlay"></div>
+<div class="deck-panel" id="deck-panel">
+    <div class="dp-header">
+        <h2>Deck Contents</h2>
+        <button class="dp-close" id="panel-close">&times;</button>
+    </div>
+    <div class="dp-body" id="dp-body"></div>
+    <div class="dp-footer">
+        <button class="btn-back-fmt" id="btn-clear-deck" style="background:#fff;color:#c44;border:1px solid #e88;">🗑 Clear</button>
+        <button class="btn-save" id="btn-open-save">Save Deck</button>
+    </div>
+</div>
+
+<!-- Save modal -->
+<div class="save-overlay" id="save-overlay">
+<div class="save-modal">
+    <h2>Save Deck</h2>
+    <div id="save-warning"></div>
+    <label for="deck-name">Deck Name</label>
+    <input type="text" id="deck-name" value="Deck" maxlength="100">
+    <label>Cover Card</label>
+    <div class="cover-grid" id="cover-grid"></div>
+    <label for="deck-desc">Description</label>
+    <textarea id="deck-desc" placeholder="Write about this deck..."></textarea>
+    <div class="toggle-row">
+        <input type="checkbox" id="deck-public">
+        <label for="deck-public" style="margin:0;font-weight:normal;">Make this deck public</label>
+    </div>
+    <div class="save-btns">
+        <button class="btn-back-fmt" id="save-back">Back</button>
+        <button class="btn-save" id="save-confirm">Save</button>
+    </div>
+</div>
+</div>
+
+<script>
+(function(){
+    const FORMAT = '{{ deck_format }}';
+    const DORMAGEDDON_IDS = [403,404,405,406,407];
+    const ZERON_IDS = [398,399,400,401,402];
+    const DOKINDAM_ID = 270;
+    const HYPERSPATIAL_KW = ['dragheart','psychic','duelmate'];
+    const GACHARANGE_KW = 'gacharange';
+    const ORIGINAL_BANNED_KW = ['dragheart','psychic','gacharange','duelmate','final forbidden field','zeron nebula'];
+
+    // ===== DECK STATE (sessionStorage) =====
+    const STORAGE_KEY = 'deckBuild_' + FORMAT;
+    let deck = loadDeck();
+
+    function loadDeck(){
+        try{ const s=sessionStorage.getItem(STORAGE_KEY); if(s) return JSON.parse(s); }catch(e){}
+        return {cards:{}, special:null, deckId:null};
+    }
+    function saveDeck(){ sessionStorage.setItem(STORAGE_KEY, JSON.stringify(deck)); }
+
+    // ===== ZONE HELPERS =====
+    function getCardZone(card){
+        const ct=((card.card_type||'')+(card.twin_card_type||'')).toLowerCase();
+        if(FORMAT==='original'){
+            if(ORIGINAL_BANNED_KW.some(kw=>ct.includes(kw))) return 'banned';
+            if(card.id===DOKINDAM_ID) return 'banned';
+            // Dormageddon X and Zeron are Special Zone only – banned in Original
+            if(DORMAGEDDON_IDS.includes(card.id)||ZERON_IDS.includes(card.id)) return 'banned';
+            return 'main';
+        }
+        if(DORMAGEDDON_IDS.includes(card.id)||ZERON_IDS.includes(card.id)) return 'special';
+        if(ct.includes(GACHARANGE_KW)) return 'gacharange';
+        if(HYPERSPATIAL_KW.some(kw=>ct.includes(kw))) return 'hyperspatial';
+        return 'main';
+    }
+
+    function getRegType(card){ return parseInt(card.regulation_type)||0; }
+
+    function maxCopies(card, zone){
+        const reg=getRegType(card);
+        if(FORMAT!=='free'){ if(reg===2) return 0; if(reg===1) return 1; }
+        if(reg===4) return zoneLimit(zone); // Unlimited: zone limit only
+        if(card.id===DOKINDAM_ID) return 1;
+        if(zone==='gacharange') return 2;
+        return 4;
+    }
+
+    function zoneLimit(zone){
+        if(zone==='main'&&FORMAT==='original') return 40;
+        if(zone==='main') return 60;
+        if(zone==='hyperspatial') return 15;
+        if(zone==='gacharange') return 12;
+        return 1;
+    }
+
+    function zoneMinCards(zone){ return zone==='main'?40:0; }
+
+    function zoneCount(zone){
+        let c=0;
+        for(const id in deck.cards){ if(deck.cards[id].zone===zone) c+=deck.cards[id].qty; }
+        return c;
+    }
+
+    function totalCards(){
+        let c=0;
+        for(const id in deck.cards) c+=deck.cards[id].qty;
+        if(deck.special) c+=5;
+        return c;
+    }
+
+    function canAddCard(card){
+        const zone=getCardZone(card);
+        if(zone==='banned'||zone==='special') return false;
+        if(card.id===DOKINDAM_ID&&deck.special) return false;
+        // Group card key
+        if(card.group_id){
+            const gkey='G'+card.group_id;
+            const cur=deck.cards[gkey]?deck.cards[gkey].qty:0;
+            if(cur>=4) return false; // group cards max 4 like normal
+            if(zoneCount(zone)+1>zoneLimit(zone)) return false;
+            return true;
+        }
+        const cur=deck.cards[card.id]?deck.cards[card.id].qty:0;
+        const max=maxCopies(card,zone);
+        if(cur>=max) return false;
+        if(zoneCount(zone)+1>zoneLimit(zone)) return false;
+        return true;
+    }
+
+    // ===== ADD / REMOVE =====
+    function addCard(card){
+        if(!canAddCard(card)) return;
+        const zone=getCardZone(card);
+        if(card.group_id){
+            const gkey='G'+card.group_id;
+            const repMember=(card.group_members&&card.group_members[0])||{};
+            if(deck.cards[gkey]){ deck.cards[gkey].qty++; }
+            else {
+                deck.cards[gkey]={
+                    zone,qty:1,
+                    is_group:true,
+                    group_id:card.group_id,
+                    group_members:card.group_members||[],
+                    name_en:(repMember.name||card.name_en||card.name_ja||'Group'),
+                    image_url:(repMember.image_url||card.image_url||''),
+                    card_type:card.card_type||'',
+                    regulation_type:card.regulation_type||0,
+                    civilization:card.civilization||''
+                };
+            }
+        } else {
+            const id=card.id;
+            if(deck.cards[id]){ deck.cards[id].qty++; }
+            else { deck.cards[id]={zone,qty:1,name_en:card.name_en||card.name_ja||'Unknown',image_url:card.image_url||'',card_type:card.card_type||'',regulation_type:card.regulation_type||0,civilization:card.civilization||''}; }
+        }
+        saveDeck(); updateUI();
+    }
+
+    function removeCard(cardId){
+        const id=String(cardId);
+        if(deck.cards[id]){ deck.cards[id].qty--; if(deck.cards[id].qty<=0) delete deck.cards[id]; }
+        saveDeck(); updateUI();
+    }
+
+    function deleteCard(cardId){ delete deck.cards[String(cardId)]; saveDeck(); updateUI(); }
+
+    function setSpecial(type){
+        deck.special=type;
+        if(type&&deck.cards[DOKINDAM_ID]) delete deck.cards[DOKINDAM_ID];
+        saveDeck(); updateUI();
+    }
+
+    // ===== UI =====
+    function updateFabCount(){ document.getElementById('fab-count').textContent=totalCards(); }
+    function updateUI(){ updateFabCount(); renderGrid(); renderPanel(); }
+
+    // ===== SEARCH STATE SAVE/RESTORE =====
+    const SEARCH_STATE_KEY = 'deckBuild_searchState_' + FORMAT;
+
+    function saveSearchState(){
+        try{
+            const st={
+                page: currentPage,
+                query: document.getElementById('search-input').value,
+                stName: document.getElementById('st-name').checked,
+                stText: document.getElementById('st-text').checked,
+                stIllustrator: document.getElementById('st-illustrator').checked,
+                civs: [...civSelected],
+                colorMode: colorMode,
+                civMode: document.querySelector('input[name="civ-mode"]:checked')?.value||'or',
+                tribe: document.getElementById('tribe-input').value,
+                costMin: document.getElementById('cost-min').value,
+                costMax: document.getElementById('cost-max').value,
+                powerMin: document.getElementById('power-min').value,
+                powerMax: document.getElementById('power-max').value,
+                hofOnly: document.getElementById('hof-only').checked,
+                cardTypes: [...ctSelected],
+                cardTypesDetail: [...ctDetailSelected],
+            };
+            sessionStorage.setItem(SEARCH_STATE_KEY, JSON.stringify(st));
+        }catch(e){}
+    }
+
+    function restoreSearchState(st){
+        if(st.query) document.getElementById('search-input').value=st.query;
+        document.getElementById('st-name').checked=st.stName!==false;
+        document.getElementById('st-text').checked=!!st.stText;
+        document.getElementById('st-illustrator').checked=!!st.stIllustrator;
+        if(st.civs&&st.civs.length){
+            st.civs.forEach(c=>{
+                civSelected.add(c);
+                const el=document.querySelector('.civilization-icon[data-value="'+c+'"]');
+                if(el) el.classList.add('selected');
+            });
+        }
+        if(st.colorMode&&st.colorMode!=='all'){
+            colorMode=st.colorMode;
+            const el=document.querySelector('.color-mode-icon[data-value="'+st.colorMode+'"]');
+            if(el) el.classList.add('selected');
+        }
+        if(st.civMode){ const r=document.querySelector('input[name="civ-mode"][value="'+st.civMode+'"]'); if(r) r.checked=true; }
+        if(st.tribe) document.getElementById('tribe-input').value=st.tribe;
+        if(st.costMin) document.getElementById('cost-min').value=st.costMin;
+        if(st.costMax) document.getElementById('cost-max').value=st.costMax;
+        if(st.powerMin) document.getElementById('power-min').value=st.powerMin;
+        if(st.powerMax) document.getElementById('power-max').value=st.powerMax;
+        if(st.hofOnly) document.getElementById('hof-only').checked=true;
+        if(st.cardTypes&&st.cardTypes.length){
+            st.cardTypes.forEach(t=>{
+                ctSelected.add(t);
+                const cb=document.querySelector('.ct-checkbox[value="'+t+'"]');
+                if(cb) cb.checked=true;
+            });
+        }
+        if(st.cardTypesDetail&&st.cardTypesDetail.length){
+            st.cardTypesDetail.forEach(t=>{
+                ctDetailSelected.add(t);
+                const cb=document.querySelector('.ct-detail-checkbox[value="'+t+'"]');
+                if(cb) cb.checked=true;
+            });
+        }
+        // Show detail panel if any conditions were set
+        const hasDetail=(st.civs&&st.civs.length)||(st.colorMode&&st.colorMode!=='all')||st.tribe||st.costMin||st.costMax||st.powerMin||st.powerMax||st.hofOnly||(st.cardTypes&&st.cardTypes.length)||(st.cardTypesDetail&&st.cardTypesDetail.length);
+        if(hasDetail){ document.getElementById('detail-conditions').hidden=false; document.getElementById('detail-toggle-arrow').textContent='▲'; }
+        fetchCards(st.page||1);
+    }
+
+    // ===== SEARCH STATE VARS =====
+    let civSelected=new Set(), colorMode='all', ctSelected=new Set(), ctDetailSelected=new Set();
+
+    // Civilization icons
+    document.querySelectorAll('.civilization-icon').forEach(icon=>{
+        icon.addEventListener('click',()=>{
+            const v=icon.dataset.value;
+            if(civSelected.has(v)){ civSelected.delete(v); icon.classList.remove('selected'); }
+            else { civSelected.add(v); icon.classList.add('selected'); }
+        });
+    });
+
+    // Color mode
+    document.querySelectorAll('.color-mode-icon').forEach(icon=>{
+        icon.addEventListener('click',()=>{
+            if(icon.classList.contains('selected')){ icon.classList.remove('selected'); colorMode='all'; }
+            else { document.querySelectorAll('.color-mode-icon').forEach(i=>i.classList.remove('selected')); icon.classList.add('selected'); colorMode=icon.dataset.value; }
+        });
+    });
+
+    // Detail toggle
+    const detailBtn=document.getElementById('detail-toggle-btn');
+    const detailDiv=document.getElementById('detail-conditions');
+    const detailArrow=document.getElementById('detail-toggle-arrow');
+    detailBtn.addEventListener('click',()=>{ detailDiv.hidden=!detailDiv.hidden; detailArrow.textContent=detailDiv.hidden?'▼':'▲'; });
+
+    // Card Type dropdown
+    (function(){
+        const dd=document.getElementById('ct-dropdown'); if(!dd) return;
+        const trigger=document.getElementById('ct-trigger');
+        const panel=document.getElementById('ct-panel');
+        const triggerText=document.getElementById('ct-trigger-text');
+        const btnClose=document.getElementById('ct-close');
+        const btnClear=document.getElementById('ct-clear');
+        const btnCustom=document.getElementById('ct-custom-toggle');
+        const boxCustom=document.getElementById('ct-custom');
+
+        function syncText(){ const list=[...ctSelected,...ctDetailSelected]; if(!list.length){triggerText.textContent='Select...';return;} if(list.length<=3) triggerText.textContent=list.join(', '); else triggerText.textContent=list.slice(0,2).join(', ')+` +${list.length-2}`; }
+        document.querySelectorAll('.ct-checkbox').forEach(cb=>{ cb.addEventListener('change',()=>{ if(cb.checked) ctSelected.add(cb.value); else ctSelected.delete(cb.value); syncText(); }); });
+        document.querySelectorAll('.ct-detail-checkbox').forEach(cb=>{ cb.addEventListener('change',()=>{ if(cb.checked) ctDetailSelected.add(cb.value); else ctDetailSelected.delete(cb.value); syncText(); }); });
+        trigger.addEventListener('click',()=>panel.hidden?panel.hidden=false:panel.hidden=true);
+        btnClose.addEventListener('click',()=>panel.hidden=true);
+        document.addEventListener('click',(e)=>{ if(!dd.contains(e.target)) panel.hidden=true; });
+        if(btnCustom&&boxCustom){ btnCustom.addEventListener('click',()=>{ boxCustom.hidden=!boxCustom.hidden; btnCustom.textContent=boxCustom.hidden?'show custom ▸':'hide custom ▾'; }); }
+        btnClear.addEventListener('click',()=>{ ctSelected.clear(); ctDetailSelected.clear(); document.querySelectorAll('.ct-checkbox,.ct-detail-checkbox').forEach(cb=>cb.checked=false); syncText(); });
+        syncText();
+    })();
+
+    // ===== CARD SEARCH =====
+    let currentPage=1;
+
+    function buildSearchParams(){
+        const params=new URLSearchParams();
+        params.set('page',currentPage);
+        const q=document.getElementById('search-input').value.trim();
+        if(q) params.set('query',q);
+        if(document.getElementById('st-name').checked) params.append('search_in','name');
+        if(document.getElementById('st-text').checked) params.append('search_in','text');
+        if(document.getElementById('st-illustrator').checked) params.append('search_in','illustrator');
+        if(civSelected.size>0) params.set('civilization',[...civSelected].join(','));
+        if(colorMode!=='all') params.set('color_mode',colorMode);
+        const civMode=document.querySelector('input[name="civ-mode"]:checked');
+        if(civMode) params.set('mode',civMode.value);
+        const tribe=document.getElementById('tribe-input').value.trim();
+        if(tribe) params.set('tribe',tribe);
+        const costMin=document.getElementById('cost-min').value.trim();
+        const costMax=document.getElementById('cost-max').value.trim();
+        if(costMin) params.set('cost_min',costMin);
+        if(costMax) params.set('cost_max',costMax);
+        const powerMin=document.getElementById('power-min').value.trim();
+        const powerMax=document.getElementById('power-max').value.trim();
+        if(powerMin) params.set('power_min',powerMin);
+        if(powerMax) params.set('power_max',powerMax);
+        if(document.getElementById('hof-only').checked) params.set('hof_only','1');
+        if(ctSelected.size>0) params.set('card_type',[...ctSelected].join(','));
+        if(ctDetailSelected.size>0) params.set('card_type_detail',[...ctDetailSelected].join(','));
+        return params;
+    }
+
+    function fetchCards(page){
+        currentPage=page;
+        fetch('/api/cards?'+buildSearchParams().toString())
+            .then(r=>r.json())
+            .then(data=>{ if(data.error){alert(data.error);return;} renderCardGrid(data.cards); renderPagination(data.page,data.pages); });
+    }
+
+    function doSearch(){ fetchCards(1); }
+    document.getElementById('do-search').addEventListener('click',doSearch);
+    document.getElementById('search-input').addEventListener('keydown',(e)=>{ if(e.key==='Enter'){e.preventDefault();doSearch();} });
+
+    // ===== RENDER CARD GRID =====
+    let loadedCards={};
+    function renderCardGrid(cards){
+        const grid=document.getElementById('card-grid');
+        grid.innerHTML='';
+        cards.forEach(card=>{
+            loadedCards[card.id]=card;
+            const zone=getCardZone(card);
+            const isBanned=zone==='banned', isSpecial=zone==='special';
+            const isGroup=!!card.group_id;
+            const gkey=isGroup?'G'+card.group_id:null;
+
+            const cell=document.createElement('div'); cell.className='card-cell';
+            if(isGroup) cell.style.position='relative';
+            const img=document.createElement('img');
+            img.src=card.image_url||''; img.alt=card.name_en||card.name_ja||''; img.title=img.alt;
+            img.addEventListener('click',()=>{
+                if(!isGroup){ saveSearchState(); window.location.href='/card/'+card.id+'?from_deck='+FORMAT; }
+            });
+            if(isBanned) img.style.opacity='0.35';
+            cell.appendChild(img);
+
+            // Group badge
+            if(isGroup){
+                const badge=document.createElement('div');
+                badge.style.cssText='position:absolute;top:4px;left:4px;background:rgba(43,108,255,.85);color:#fff;font-size:.62em;font-weight:700;padding:2px 5px;border-radius:4px;pointer-events:none;';
+                badge.textContent='GROUP';
+                cell.appendChild(badge);
+            }
+
+            const nameP=document.createElement('div'); nameP.className='card-name'; nameP.textContent=card.name_en||card.name_ja||'';
+            cell.appendChild(nameP);
+
+            if(!isBanned&&!isSpecial){
+                const qr=document.createElement('div'); qr.className='qty-row';
+                const minus=document.createElement('button'); minus.className='qty-btn'; minus.textContent='−';
+                minus.addEventListener('click',()=>{ if(isGroup&&gkey){ removeCard(gkey); } else { removeCard(card.id); } });
+                const qtySpan=document.createElement('span'); qtySpan.className='qty-val';
+                qtySpan.id=isGroup?'qty-'+gkey:'qty-'+card.id;
+                qtySpan.textContent=isGroup?(deck.cards[gkey]?deck.cards[gkey].qty:0):(deck.cards[card.id]?deck.cards[card.id].qty:0);
+                const plus=document.createElement('button'); plus.className='qty-btn'; plus.textContent='+';
+                plus.addEventListener('click',()=>addCard(card));
+                qr.appendChild(minus); qr.appendChild(qtySpan); qr.appendChild(plus);
+                cell.appendChild(qr);
+            } else if(isBanned){
+                const note=document.createElement('div'); note.style.cssText='font-size:.7em;color:#c44;margin-top:2px;'; note.textContent='Not available';
+                cell.appendChild(note);
+            }
+            grid.appendChild(cell);
+        });
+    }
+
+    function renderGrid(){
+        for(const id in loadedCards){
+            const card=loadedCards[id];
+            if(card.group_id){
+                const gkey='G'+card.group_id;
+                const el=document.getElementById('qty-'+gkey);
+                if(el) el.textContent=deck.cards[gkey]?deck.cards[gkey].qty:0;
+            } else {
+                const el=document.getElementById('qty-'+id);
+                if(el) el.textContent=deck.cards[id]?deck.cards[id].qty:0;
+            }
+        }
+    }
+
+    // ===== PAGINATION =====
+    function renderPagination(page,pages){
+        const div=document.getElementById('pagination'); div.innerHTML='';
+        if(pages<=1) return;
+        for(let p=1;p<=pages;p++){
+            if(p===page){ const s=document.createElement('span');s.className='current';s.textContent=p;div.appendChild(s); }
+            else { const a=document.createElement('a');a.href='#';a.textContent=p;a.addEventListener('click',(e)=>{e.preventDefault();fetchCards(p);window.scrollTo(0,0);});div.appendChild(a); }
+        }
+    }
+
+    // ===== RIGHT PANEL =====
+    const panelOverlay=document.getElementById('panel-overlay');
+    const panelEl=document.getElementById('deck-panel');
+    const fabBtn=document.getElementById('deck-fab');
+
+    function openPanel(){ panelOverlay.classList.add('open'); panelEl.classList.add('open'); renderPanel(); }
+    function closePanel(){ panelOverlay.classList.remove('open'); panelEl.classList.remove('open'); }
+
+    fabBtn.addEventListener('click',openPanel);
+    panelOverlay.addEventListener('click',closePanel);
+    document.getElementById('panel-close').addEventListener('click',closePanel);
+
+    function renderPanel(){
+        const body=document.getElementById('dp-body'); body.innerHTML='';
+        const zones=['main'];
+        if(FORMAT!=='original') zones.push('hyperspatial','gacharange');
+        zones.forEach(zone=>{
+            const zoneCards=Object.entries(deck.cards).filter(([id,c])=>c.zone===zone);
+            if(zone==='main'||zoneCards.length>0||FORMAT!=='original'){
+                const title=document.createElement('div'); title.className='zone-title';
+                const label=zone==='main'?'Main Deck':zone==='hyperspatial'?'Hyperspatial Zone':'Super GR Zone';
+                title.textContent=label+' ('+zoneCount(zone)+'/'+zoneLimit(zone)+')';
+                body.appendChild(title);
+                zoneCards.sort((a,b)=>(a[1].name_en||'').localeCompare(b[1].name_en||''));
+                zoneCards.forEach(([id,c])=>body.appendChild(makeCardRow(id,c)));
+                if(!zoneCards.length){ const empty=document.createElement('div');empty.style.cssText='font-size:.8em;color:#aaa;padding:4px 0;';empty.textContent='No cards yet';body.appendChild(empty); }
+            }
+        });
+        if(FORMAT!=='original'){
+            const title=document.createElement('div');title.className='zone-title';title.textContent='Special';body.appendChild(title);
+            const sec=document.createElement('div');sec.className='special-section';
+            ['none','dormageddon_x','zeron'].forEach(val=>{
+                const lab=document.createElement('label');
+                const radio=document.createElement('input');radio.type='radio';radio.name='special_type';radio.value=val;
+                radio.checked=(val==='none'&&!deck.special)||(deck.special===val);
+                radio.addEventListener('change',()=>setSpecial(val==='none'?null:val));
+                lab.appendChild(radio);
+                lab.appendChild(document.createTextNode(' '+{none:'None',dormageddon_x:'Dormageddon X',zeron:'Zeron'}[val]));
+                sec.appendChild(lab);
+            });
+            body.appendChild(sec);
+        }
+    }
+
+    function makeCardRow(id,c){
+        const row=document.createElement('div');row.className='dp-card-row';
+        const link=document.createElement('a');link.className='dp-card-name';link.href='#';
+        if(c.is_group){
+            link.textContent='[G] '+(c.name_en||'Group #'+c.group_id);
+            link.title='Group: '+((c.group_members||[]).map(m=>m.name||'ID:'+m.card_id).join(', '));
+            link.addEventListener('click',(e)=>{ e.preventDefault(); });
+        } else {
+            link.textContent=c.name_en||'Card #'+id;
+            link.addEventListener('click',(e)=>{ e.preventDefault(); saveSearchState(); window.location.href='/card/'+id+'?from_deck='+FORMAT; });
+        }
+
+        const minus=document.createElement('button');minus.className='dp-qty-btn';minus.textContent='−';
+        minus.addEventListener('click',()=>removeCard(id));
+        const qty=document.createElement('span');qty.className='dp-qty';qty.textContent=c.qty;
+        const plus=document.createElement('button');plus.className='dp-qty-btn';plus.textContent='+';
+        plus.addEventListener('click',()=>{
+            if(c.is_group){
+                if(c.qty<4&&zoneCount(c.zone)<zoneLimit(c.zone)){ c.qty++;saveDeck();updateUI(); }
+            } else {
+                const cached=loadedCards[id];
+                if(cached){ addCard(cached); }
+                else {
+                    const existing=deck.cards[id];
+                    if(existing){
+                        const zone=c.zone;
+                        const reg=parseInt(c.regulation_type)||0;
+                        const max=(FORMAT!=='free'&&reg===2)?0:(FORMAT!=='free'&&reg===1)?1:(reg===4)?zoneLimit(zone):(zone==='gacharange')?2:4;
+                        if(existing.qty<max&&zoneCount(zone)<zoneLimit(zone)){ existing.qty++;saveDeck();updateUI(); }
+                    }
+                }
+            }
+        });
+        const trash=document.createElement('button');trash.className='dp-trash';trash.textContent='🗑';
+        trash.addEventListener('click',()=>deleteCard(id));
+        row.appendChild(link);row.appendChild(minus);row.appendChild(qty);row.appendChild(plus);row.appendChild(trash);
+        return row;
+    }
+
+    // ===== SAVE MODAL =====
+    const saveOverlay=document.getElementById('save-overlay');
+    document.getElementById('btn-open-save').addEventListener('click',openSaveModal);
+    document.getElementById('save-back').addEventListener('click',()=>saveOverlay.classList.remove('open'));
+    document.getElementById('save-confirm').addEventListener('click',doSave);
+
+    function openSaveModal(){
+        saveOverlay.classList.add('open');
+        // Pre-fill if editing an existing deck (loaded via /api/deck/<id>/load)
+        document.getElementById('deck-name').value=deck.name||'Deck';
+        document.getElementById('deck-desc').value=deck.description||'';
+        document.getElementById('deck-public').checked=!!deck.is_public;
+        const warn=document.getElementById('save-warning');
+        const mainCount=zoneCount('main'), mainMin=zoneMinCards('main');
+        warn.innerHTML=mainCount<mainMin?'<div class="deck-warning">Main Deck has '+mainCount+'/'+mainMin+' cards. You can save but cannot publish.</div>':'';
+        renderCoverGrid();
+    }
+
+    let selectedCover=null;
+    function renderCoverGrid(){
+        const grid=document.getElementById('cover-grid');grid.innerHTML='';
+        const ids=Object.keys(deck.cards);
+        if(!ids.length){ grid.innerHTML='<div style="font-size:.8em;color:#aaa;grid-column:1/-1;">Add cards to select a cover image</div>';return; }
+        // Pre-select cover card if editing
+        if(!selectedCover&&deck.cover_card_id) selectedCover=deck.cover_card_id;
+        ids.forEach(id=>{
+            const c=deck.cards[id];
+            const img=document.createElement('img');img.src=c.image_url||'';img.alt=c.name_en||'';
+            if(selectedCover===parseInt(id)||selectedCover===id) img.classList.add('selected');
+            img.addEventListener('click',()=>{ selectedCover=parseInt(id);grid.querySelectorAll('img').forEach(i=>i.classList.remove('selected'));img.classList.add('selected'); });
+            grid.appendChild(img);
+        });
+        if(!selectedCover&&ids.length>0) selectedCover=parseInt(ids[0]);
+    }
+
+    function doSave(){
+        const name=document.getElementById('deck-name').value.trim();
+        if(!name){ alert('Please enter a deck name.');return; }
+        const desc=document.getElementById('deck-desc').value;
+        const isPublic=document.getElementById('deck-public').checked;
+        const mainCount=zoneCount('main'),mainMin=zoneMinCards('main');
+        if(isPublic&&mainCount<mainMin){ alert('Cannot publish: Main Deck needs at least '+mainMin+' cards.');return; }
+
+        const cardsArr=[];
+        for(const id in deck.cards){
+            const c=deck.cards[id];
+            if(c.is_group){
+                // Group card: store representative card_id + group_id
+                const repId=(c.group_members&&c.group_members[0])?c.group_members[0].card_id:null;
+                if(repId) cardsArr.push({card_id:repId,zone:c.zone,quantity:c.qty,group_id:c.group_id});
+            } else {
+                cardsArr.push({card_id:parseInt(id),zone:c.zone,quantity:c.qty});
+            }
+        }
+        if(deck.special==='dormageddon_x') DORMAGEDDON_IDS.forEach(cid=>cardsArr.push({card_id:cid,zone:'special',quantity:1}));
+        else if(deck.special==='zeron') ZERON_IDS.forEach(cid=>cardsArr.push({card_id:cid,zone:'special',quantity:1}));
+
+        const payload={deck_id:deck.deckId||null,name,format:FORMAT,description:desc,cover_card_id:selectedCover,special_type:deck.special,is_public:isPublic,cards:cardsArr};
+
+        fetch('/api/deck/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+            .then(r=>r.json())
+            .then(data=>{
+                if(data.ok){
+                    sessionStorage.removeItem(STORAGE_KEY);
+                    window.location.href='/';
+                } else { alert('Save failed: '+(data.error||'Unknown error')); }
+            }).catch(()=>alert('Network error'));
+    }
+
+    // Clear deck
+    document.getElementById('btn-clear-deck').addEventListener('click',()=>{
+        if(totalCards()===0) return;
+        if(confirm('Clear all cards from the deck?')){
+            deck.cards={};deck.special=null;
+            saveDeck();updateUI();
+        }
+    });
+
+    // ===== INIT =====
+    updateFabCount();
+    const _savedState=sessionStorage.getItem(SEARCH_STATE_KEY);
+    if(_savedState){
+        try{ sessionStorage.removeItem(SEARCH_STATE_KEY); restoreSearchState(JSON.parse(_savedState)); }
+        catch(e){ fetchCards(1); }
+    } else {
+        fetchCards(1);
+    }
+})();
+
+// ===== Hamburger menu =====
+(function(){
+    const btn=document.getElementById('hamburger-btn');
+    const overlay=document.getElementById('nav-overlay');
+    const drawer=document.getElementById('nav-drawer');
+    const closeBtn=document.getElementById('nav-drawer-close');
+    if(!btn) return;
+    function openMenu(){ overlay.classList.add('open'); drawer.classList.add('open'); }
+    function closeMenu(){ overlay.classList.remove('open'); drawer.classList.remove('open'); }
+    btn.addEventListener('click', openMenu);
+    overlay.addEventListener('click', closeMenu);
+    closeBtn.addEventListener('click', closeMenu);
+})();
+
+// ===== Profile modal =====
+(function(){
+    const profileBtn=document.getElementById('nav-profile-btn');
+    if(!profileBtn) return;
+    const modalOverlay=document.getElementById('profile-modal-overlay');
+    const modal=document.getElementById('profile-modal');
+    const usernameInput=document.getElementById('profile-username-input');
+    const saveBtn=document.getElementById('profile-save-btn');
+    const cancelBtn=document.getElementById('profile-cancel-btn');
+    const msgDiv=document.getElementById('profile-msg');
+    const navUserDisplay=document.getElementById('nav-username-display');
+    function openProfile(){
+        document.getElementById('nav-overlay').classList.remove('open');
+        document.getElementById('nav-drawer').classList.remove('open');
+        msgDiv.textContent='';
+        usernameInput.value='';
+        modalOverlay.style.display='block'; modal.style.display='block';
+        fetch('/api/profile').then(r=>r.json()).then(data=>{
+            if(data.ok) usernameInput.value=data.username||data.email||'';
+        });
+    }
+    function closeProfile(){ modalOverlay.style.display='none'; modal.style.display='none'; }
+    profileBtn.addEventListener('click',(e)=>{ e.preventDefault(); openProfile(); });
+    modalOverlay.addEventListener('click', closeProfile);
+    cancelBtn.addEventListener('click', closeProfile);
+    saveBtn.addEventListener('click',()=>{
+        const val=usernameInput.value.trim();
+        if(!val){ msgDiv.style.color='#d44'; msgDiv.textContent='Username cannot be empty.'; return; }
+        saveBtn.disabled=true;
+        fetch('/api/profile/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:val})})
+        .then(r=>r.json()).then(data=>{
+            saveBtn.disabled=false;
+            if(data.ok){ msgDiv.style.color='#2a9d2a'; msgDiv.textContent='Saved!';
+                if(navUserDisplay) navUserDisplay.textContent=data.username;
+                setTimeout(closeProfile, 800); }
+            else{ msgDiv.style.color='#d44'; msgDiv.textContent=data.error||'Error saving.'; }
+        }).catch(()=>{ saveBtn.disabled=false; msgDiv.style.color='#d44'; msgDiv.textContent='Network error.'; });
+    });
+})();
+</script>
+</body>
+</html>

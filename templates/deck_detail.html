@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ deck.name }} - Deck Detail</title>
+<style>
+*{box-sizing:border-box;}
+body{font-family:Arial,sans-serif;margin:0;padding:20px;background:#fafafa;}
+.container{max-width:1100px;margin:0 auto;}
+h1{margin:0 0 6px;font-size:1.6em;}
+.deck-meta{color:#888;font-size:.88em;margin-bottom:14px;}
+.fmt-badge{display:inline-block;padding:3px 12px;border-radius:16px;font-size:.78em;font-weight:700;}
+.fmt-original{background:#e3f0ff;color:#2b6cff;}
+.fmt-advanced{background:#ffeaea;color:#d44;}
+.fmt-free{background:#e8f8e8;color:#2a9d2a;}
+
+/* === Civilization tags (6 canonical) === */
+.civ-tags{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0;}
+.civ-tag{padding:3px 10px;border-radius:12px;font-size:.78em;font-weight:700;}
+.civ-tag-Fire{background:#d44;color:#fff;}
+.civ-tag-Water{background:#38c;color:#fff;}
+.civ-tag-Nature{background:#3a3;color:#fff;}
+.civ-tag-Light{background:#da2;color:#fff;}
+.civ-tag-Darkness{background:#555;color:#fff;}
+.civ-tag-Colorless{background:#fff;color:#111;border:1.5px solid #111;}
+
+.description{background:#fff;padding:14px 18px;border-radius:10px;margin-bottom:16px;font-size:.9em;color:#444;line-height:1.6;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+
+/* Layout */
+.deck-layout{display:flex;gap:20px;flex-wrap:wrap;}
+.deck-left{flex:1 1 600px;}
+.deck-right{flex:0 0 300px;}
+.zone-title{font-size:.92em;font-weight:700;color:#555;margin:16px 0 8px;padding-bottom:4px;border-bottom:2px solid #ddd;text-transform:uppercase;}
+.card-image-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;}
+.card-image-grid img{width:100%;border-radius:4px;border:1px solid #ddd;cursor:pointer;}
+.card-image-grid img:hover{border-color:#888;}
+
+/* Edit/Delete buttons */
+.deck-actions{display:flex;gap:10px;margin-top:24px;justify-content:flex-end;}
+.btn-edit{padding:10px 24px;border:none;border-radius:8px;background:#2b6cff;color:#fff;font-weight:700;cursor:pointer;font-size:.92em;}
+.btn-edit:hover{background:#1a55d0;}
+.btn-delete{padding:10px 24px;border:none;border-radius:8px;background:#e44;color:#fff;font-weight:700;cursor:pointer;font-size:.92em;}
+.btn-delete:hover{background:#c00;}
+
+.back-link{display:block;margin-top:24px;color:#2b6cff;text-decoration:none;font-size:.9em;}
+.back-link:hover{text-decoration:underline;}
+.btn-print{padding:10px 24px;border:none;border-radius:8px;background:#555;color:#fff;font-weight:700;cursor:pointer;font-size:.92em;}
+.btn-print:hover{background:#333;}
+.print-actions{display:flex;gap:10px;margin-top:16px;}
+
+/* ===== Lightbox ===== */
+.lightbox-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:3000;align-items:center;justify-content:center;gap:20px;cursor:pointer;flex-wrap:wrap;}
+.lightbox-overlay.open{display:flex;}
+.lightbox-overlay img{max-width:38vw;max-height:88vh;border-radius:8px;object-fit:contain;pointer-events:none;}
+@media(max-width:700px){
+    .lightbox-overlay img{max-width:80vw;max-height:44vh;}
+}
+
+@media(max-width:700px){
+    .card-image-grid{grid-template-columns:repeat(5,1fr);}
+    .deck-right{flex:0 0 100%;}
+    .deck-actions{justify-content:center;}
+}
+</style>
+</head>
+<body>
+
+<!-- Lightbox overlay -->
+<div class="lightbox-overlay" id="lightbox-overlay"></div>
+
+<div class="container">
+    <h1>{{ deck.name }}</h1>
+    <div class="deck-meta">
+        <span class="fmt-badge fmt-{{ deck.format }}">{{ deck.format|capitalize }}</span>
+        &middot; {{ deck.created_at[:10] if deck.created_at else '' }}
+        {% if creator_username %}
+        &middot; by <span style="color:#555;">{{ creator_username }}</span>
+        {% endif %}
+    </div>
+
+    {% if deck.description %}
+    <div class="description">{{ deck.description }}</div>
+    {% endif %}
+
+    <!-- Civilization tags: canonical 6 civs, deduplicated, from both civilization and twin_civilization -->
+    {% set seen_civs = [] %}
+    {% set canonical = ['Fire','Water','Nature','Light','Darkness','Colorless'] %}
+    {% for dc in deck_cards %}
+        {% set card = cards_map.get(dc.card_id) %}
+        {% if card %}
+            {% for field_val in [(card.civilization or ''), (card.twin_civilization or '')] %}
+                {% for civ in canonical %}
+                    {% if civ|lower in field_val|lower and civ not in seen_civs %}
+                        {% if seen_civs.append(civ) %}{% endif %}
+                    {% endif %}
+                {% endfor %}
+            {% endfor %}
+        {% endif %}
+    {% endfor %}
+    {% if seen_civs %}
+    <div class="civ-tags">
+        {% for civ in seen_civs %}
+        <span class="civ-tag civ-tag-{{ civ }}">{{ civ }}</span>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% set main_cards = [] %}
+    {% set hyper_cards = [] %}
+    {% set gacha_cards = [] %}
+    {% set special_cards = [] %}
+    {% for dc in deck_cards %}
+        {% if dc.zone == 'main' %}{% if main_cards.append(dc) %}{% endif %}
+        {% elif dc.zone == 'hyperspatial' %}{% if hyper_cards.append(dc) %}{% endif %}
+        {% elif dc.zone == 'gacharange' %}{% if gacha_cards.append(dc) %}{% endif %}
+        {% elif dc.zone == 'special' %}{% if special_cards.append(dc) %}{% endif %}
+        {% endif %}
+    {% endfor %}
+
+    <div class="deck-layout">
+        <div class="deck-left">
+            <div class="zone-title">Main Deck ({{ main_cards|sum(attribute='quantity') }})</div>
+            <div class="card-image-grid">
+                {% for dc in main_cards %}
+                    {% if dc.group_id and group_detail_map.get(dc.group_id) %}
+                        {% set ginfo = group_detail_map[dc.group_id] %}
+                        {% set rep = ginfo.members[0] if ginfo.members else None %}
+                        {% if rep %}
+                            {% for i in range(dc.quantity) %}
+                            <img src="{{ rep.image_url }}"
+                                 alt="{{ rep.name }} (Group)"
+                                 title="{{ rep.name }} (Group — click to view all)"
+                                 data-group-members="{{ ginfo.members | tojson | e }}"
+                                 class="lightbox-trigger group-card-img" style="cursor:zoom-in;position:relative;">
+                            {% endfor %}
+                        {% endif %}
+                    {% else %}
+                        {% set card = cards_map.get(dc.card_id) %}
+                        {% if card %}
+                            {% for i in range(dc.quantity) %}
+                            <img src="{{ card.image_url }}"
+                                 alt="{{ card.name_en or card.name_ja or '' }}"
+                                 title="{{ card.name_en or card.name_ja or '' }}"
+                                 data-img1="{{ card.image_url }}"
+                                 data-img2="{{ card.image_url2 or '' }}"
+                                 class="lightbox-trigger" style="cursor:zoom-in;">
+                            {% endfor %}
+                        {% endif %}
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        {% if deck.format != 'original' %}
+        <div class="deck-right">
+            {% if gacha_cards %}
+            <div class="zone-title">Super GR Zone ({{ gacha_cards|sum(attribute='quantity') }})</div>
+            <div class="card-image-grid" style="grid-template-columns:repeat(4,1fr);">
+                {% for dc in gacha_cards %}
+                    {% if dc.group_id and group_detail_map.get(dc.group_id) %}
+                        {% set ginfo = group_detail_map[dc.group_id] %}
+                        {% set rep = ginfo.members[0] if ginfo.members else None %}
+                        {% if rep %}{% for i in range(dc.quantity) %}
+                        <img src="{{ rep.image_url }}" alt="{{ rep.name }} (Group)" title="{{ rep.name }} (Group)"
+                             data-group-members="{{ ginfo.members | tojson | e }}"
+                             class="lightbox-trigger group-card-img" style="cursor:zoom-in;">
+                        {% endfor %}{% endif %}
+                    {% else %}
+                        {% set card = cards_map.get(dc.card_id) %}
+                        {% if card %}{% for i in range(dc.quantity) %}
+                        <img src="{{ card.image_url }}" alt="{{ card.name_en or card.name_ja or '' }}"
+                             data-img1="{{ card.image_url }}" data-img2="{{ card.image_url2 or '' }}"
+                             class="lightbox-trigger" style="cursor:zoom-in;">
+                        {% endfor %}{% endif %}
+                    {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if hyper_cards %}
+            <div class="zone-title">Hyperspatial Zone ({{ hyper_cards|sum(attribute='quantity') }})</div>
+            <div class="card-image-grid" style="grid-template-columns:repeat(4,1fr);">
+                {% for dc in hyper_cards %}
+                    {% if dc.group_id and group_detail_map.get(dc.group_id) %}
+                        {% set ginfo = group_detail_map[dc.group_id] %}
+                        {% set rep = ginfo.members[0] if ginfo.members else None %}
+                        {% if rep %}{% for i in range(dc.quantity) %}
+                        <img src="{{ rep.image_url }}" alt="{{ rep.name }} (Group)" title="{{ rep.name }} (Group)"
+                             data-group-members="{{ ginfo.members | tojson | e }}"
+                             class="lightbox-trigger group-card-img" style="cursor:zoom-in;">
+                        {% endfor %}{% endif %}
+                    {% else %}
+                        {% set card = cards_map.get(dc.card_id) %}
+                        {% if card %}{% for i in range(dc.quantity) %}
+                        <img src="{{ card.image_url }}" alt="{{ card.name_en or card.name_ja or '' }}"
+                             data-img1="{{ card.image_url }}" data-img2="{{ card.image_url2 or '' }}"
+                             class="lightbox-trigger" style="cursor:zoom-in;">
+                        {% endfor %}{% endif %}
+                    {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if special_cards %}
+            <div class="zone-title">Special ({{ special_cards|length }})</div>
+            <div class="card-image-grid" style="grid-template-columns:repeat(5,1fr);">
+                {% for dc in special_cards %}
+                    {% set card = cards_map.get(dc.card_id) %}
+                    {% if card %}
+                    <img src="{{ card.image_url }}" alt="{{ card.name_en or card.name_ja or '' }}"
+                         data-img1="{{ card.image_url }}" data-img2="{{ card.image_url2 or '' }}"
+                         class="lightbox-trigger" style="cursor:zoom-in;">
+                    {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    {% if is_owner %}
+    <div class="deck-actions">
+        <button class="btn-edit" id="btn-edit">Edit Deck</button>
+        <button class="btn-delete" id="btn-delete">Delete Deck</button>
+    </div>
+    {% endif %}
+
+    <div class="print-actions">
+        <button class="btn-print" id="btn-print-deck">🖨 Print Deck</button>
+    </div>
+
+    <a href="{{ url_for('deck_list') }}" class="back-link">← Back to deck list</a>
+</div>
+
+<!-- Print deck data (injected server-side) -->
+<script id="deck-print-data" type="application/json">
+{{ deck_print_json | tojson | safe }}
+</script>
+
+{% if is_owner %}
+<script>
+const DECK_ID = {{ deck.id }};
+const DECK_FORMAT = {{ deck.format|tojson }};
+
+document.getElementById('btn-edit').addEventListener('click', async function(){
+    try {
+        const resp = await fetch('/api/deck/'+DECK_ID+'/load');
+        const data = await resp.json();
+        if(!data.ok){ alert('Failed to load deck data: '+(data.error||'Unknown'));return; }
+        // Store deck state in sessionStorage for deck_build.html to pick up
+        sessionStorage.setItem('deckBuild_'+DECK_FORMAT, JSON.stringify(data.deck_state));
+        window.location.href = '/deck/build?format='+DECK_FORMAT;
+    } catch(e){ alert('Error: '+e.message); }
+});
+
+document.getElementById('btn-delete').addEventListener('click', async function(){
+    if(!confirm('Delete this deck? This cannot be undone.')) return;
+    try {
+        const resp = await fetch('/api/deck/'+DECK_ID+'/delete', {method:'POST'});
+        const data = await resp.json();
+        if(data.ok){ window.location.href='/decks'; }
+        else { alert('Delete failed: '+(data.error||'Unknown')); }
+    } catch(e){ alert('Error: '+e.message); }
+});
+</script>
+{% endif %}
+
+<!-- Print Deck JS -->
+<script>
+(function(){
+    const btn = document.getElementById('btn-print-deck');
+    if(!btn) return;
+    btn.addEventListener('click', function(){
+        try {
+            const raw = document.getElementById('deck-print-data');
+            const cards = JSON.parse(raw ? raw.textContent.trim() : '[]');
+            // Build printList: deduplicate by card_id, sum quantities
+            const map = {};
+            cards.forEach(function(c){
+                const key = String(c.card_id);
+                if(map[key]){
+                    map[key].qty += c.qty;
+                } else {
+                    map[key] = {
+                        key: key,
+                        card_id: c.card_id,
+                        name: c.name,
+                        image_url: c.image_url,
+                        image_url2: c.image_url2 || null,
+                        qty: c.qty
+                    };
+                }
+            });
+            const printList = Object.values(map);
+            sessionStorage.setItem('printList', JSON.stringify(printList));
+            window.location.href = '/print';
+        } catch(e) {
+            alert('Error building print list: ' + e.message);
+        }
+    });
+})();
+</script>
+
+<!-- Lightbox JS -->
+<script>
+(function(){
+    const overlay = document.getElementById('lightbox-overlay');
+    if(!overlay) return;
+
+    function openLightbox(img1, img2){
+        overlay.innerHTML = '';
+        const i1 = document.createElement('img');
+        i1.src = img1;
+        overlay.appendChild(i1);
+        if(img2){
+            const i2 = document.createElement('img');
+            i2.src = img2;
+            overlay.appendChild(i2);
+        }
+        overlay.classList.add('open');
+    }
+
+    // Open lightbox showing all cards in a group
+    function openLightboxGroup(members){
+        overlay.innerHTML = '';
+        members.forEach(function(m){
+            const i1 = document.createElement('img');
+            i1.src = m.image_url;
+            i1.alt = m.name || '';
+            overlay.appendChild(i1);
+            if(m.image_url2){
+                const i2 = document.createElement('img');
+                i2.src = m.image_url2;
+                i2.alt = m.name || '';
+                overlay.appendChild(i2);
+            }
+        });
+        overlay.classList.add('open');
+    }
+
+    function closeLightbox(){
+        overlay.classList.remove('open');
+        overlay.innerHTML = '';
+    }
+
+    document.querySelectorAll('.lightbox-trigger').forEach(img=>{
+        img.addEventListener('click', function(e){
+            e.stopPropagation();
+            const groupData = this.dataset.groupMembers;
+            if(groupData){
+                try {
+                    const members = JSON.parse(groupData);
+                    openLightboxGroup(members);
+                } catch(ex) {
+                    openLightbox(this.src, null);
+                }
+            } else {
+                const img1 = this.dataset.img1 || this.src;
+                const img2 = this.dataset.img2 || '';
+                openLightbox(img1, img2 || null);
+            }
+        });
+    });
+
+    overlay.addEventListener('click', closeLightbox);
+    document.addEventListener('keydown', function(e){
+        if(e.key === 'Escape') closeLightbox();
+    });
+})();
+</script>
+</body>
+</html>

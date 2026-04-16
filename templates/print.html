@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Card Print - Duel Masters</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:Arial,sans-serif;background:#ddd;height:100vh;overflow:hidden;}
+
+/* ===== App layout ===== */
+.app{display:flex;height:100vh;}
+
+/* ===== Sidebar ===== */
+.sidebar{width:360px;min-width:360px;background:#fff;display:flex;flex-direction:column;box-shadow:2px 0 8px rgba(0,0,0,.1);z-index:10;overflow:hidden;}
+.sidebar-hdr{padding:14px 18px 12px;border-bottom:1px solid #eee;font-size:1.1em;font-weight:700;display:flex;align-items:center;gap:8px;}
+.sidebar-body{flex:1;overflow-y:auto;padding:16px 16px 0;}
+.sidebar-footer{padding:10px 16px 16px;border-top:1px solid #eee;}
+
+/* Settings */
+.sg{margin-bottom:12px;}
+.sg label{display:block;font-size:.74em;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;}
+.sg select,.sg input[type=number]{width:100%;padding:6px 9px;border:1.5px solid #ccc;border-radius:7px;font-size:.87em;background:#fff;}
+.sg-row{display:flex;gap:8px;}
+.sg-row .sg{flex:1;}
+
+/* Divider */
+hr.sdiv{border:none;border-top:1px solid #eee;margin:10px 0 8px;}
+
+/* Card count label */
+#total-label{font-size:.75em;color:#888;margin-bottom:8px;}
+
+/* Print item */
+.pi{display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid #f0f0f0;}
+.pi-thumb{width:34px;height:47px;object-fit:cover;border-radius:3px;border:1px solid #ddd;flex-shrink:0;}
+.pi-info{flex:1;min-width:0;}
+.pi-name{font-size:.77em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#333;}
+.pi-twin{font-size:.68em;color:#999;margin-top:1px;}
+.pi-qty{display:flex;align-items:center;gap:3px;margin-top:3px;}
+.pq-btn{width:21px;height:21px;border:1px solid #bbb;border-radius:4px;background:#fff;cursor:pointer;font-size:.82em;display:flex;align-items:center;justify-content:center;}
+.pq-btn:hover{background:#eee;}
+.pq-val{font-size:.8em;font-weight:700;min-width:14px;text-align:center;}
+.pi-trash{background:none;border:none;cursor:pointer;color:#c44;font-size:.9em;padding:2px;margin-left:2px;flex-shrink:0;}
+.pi-trash:hover{color:#a00;}
+.pi-empty{text-align:center;color:#bbb;font-size:.83em;padding:18px 0;line-height:1.7;}
+
+/* Footer buttons */
+.btn-add{width:100%;padding:9px;border:2px dashed #bbb;border-radius:9px;background:#f8f8f8;cursor:pointer;font-size:.87em;color:#555;margin-bottom:8px;transition:all .15s;}
+.btn-add:hover{border-color:#888;background:#f0f0f0;}
+.btn-clear-all{width:100%;padding:8px;border:1.5px solid #e88;border-radius:9px;background:#fff;cursor:pointer;font-size:.82em;color:#c44;margin-bottom:6px;transition:all .15s;}
+.btn-clear-all:hover{background:#fff5f5;border-color:#c44;}
+.btn-print{width:100%;padding:11px;border:none;border-radius:9px;background:#2b6cff;color:#fff;font-weight:700;cursor:pointer;font-size:.93em;transition:background .15s;}
+.btn-print:hover{background:#1a55d0;}
+.pgcount{font-size:.74em;color:#999;text-align:center;margin-bottom:6px;}
+
+/* ===== Main preview ===== */
+.main{flex:1;overflow:auto;padding:24px 20px;display:flex;flex-direction:column;align-items:center;gap:20px;background:#e0e0e0;}
+.preview-hint{color:#aaa;font-size:.9em;text-align:center;margin-top:60px;line-height:1.9;}
+.hint-icon{font-size:3em;display:block;margin-bottom:6px;}
+
+/* Print page */
+.print-page{background:#fff;box-shadow:0 2px 14px rgba(0,0,0,.16);flex-shrink:0;position:relative;overflow:hidden;}
+.pp-inner{display:grid;align-content:start;gap:1px;}
+.pp-cell{overflow:hidden;background:#f5f5f5;display:flex;align-items:center;justify-content:center;}
+.pp-cell img{width:100%;height:100%;object-fit:fill;display:block;}
+.pp-num{position:absolute;bottom:5px;right:8px;font-size:10px;color:#ccc;pointer-events:none;}
+
+/* ===== Hamburger ===== */
+.hamburger-btn{position:fixed;top:14px;right:18px;z-index:1100;background:#fff;border:1px solid #ccc;border-radius:8px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:22px;color:#333;box-shadow:0 1px 6px rgba(0,0,0,.1);line-height:1;}
+.hamburger-btn:hover{background:#f0f0f0;}
+.nav-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:1200;}
+.nav-overlay.open{display:block;}
+.nav-drawer{position:fixed;top:0;right:-280px;width:270px;height:100%;background:#fff;z-index:1300;box-shadow:-2px 0 16px rgba(0,0,0,.15);transition:right .25s ease;display:flex;flex-direction:column;padding:20px 0;}
+.nav-drawer.open{right:0;}
+.nav-drawer-close{align-self:flex-end;background:none;border:none;font-size:24px;cursor:pointer;padding:0 20px 10px;color:#666;}
+.nav-drawer .nav-user{padding:8px 24px 16px;font-size:.85em;color:#888;border-bottom:1px solid #eee;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.nav-drawer a{display:block;padding:13px 24px;color:#333;text-decoration:none;font-size:.95em;transition:background .15s;}
+.nav-drawer a:hover{background:#f5f5f5;}
+.nav-drawer .nav-sep{height:1px;background:#eee;margin:8px 16px;}
+
+/* ===== @media print ===== */
+@media print{
+  .hamburger-btn,.nav-overlay,.nav-drawer,
+  #profile-modal-overlay,#profile-modal,
+  .sidebar{display:none!important;}
+  body{height:auto;overflow:visible;background:#fff;}
+  .app{display:block;height:auto;}
+  .main{display:block;padding:0;background:#fff;overflow:visible;}
+  .print-page{box-shadow:none;page-break-after:always;break-after:page;}
+  .print-page:last-child{page-break-after:avoid;break-after:avoid;}
+  .pp-num{display:none;}
+}
+
+@media(max-width:760px){
+  body{height:auto;overflow:auto;}
+  .app{flex-direction:column;height:auto;min-height:100vh;}
+  .sidebar{width:100%;min-width:0;max-height:none;flex-shrink:0;}
+  .sidebar-body{max-height:300px;overflow-y:auto;}
+  .sg-row{flex-direction:row;}
+  .main{flex:1;min-height:60vh;overflow:auto;padding:16px 10px;}
+}
+</style>
+</head>
+<body>
+
+<!-- Hamburger -->
+<button class="hamburger-btn" id="hamburger-btn" aria-label="Menu">&#9776;</button>
+<div class="nav-overlay" id="nav-overlay"></div>
+<nav class="nav-drawer" id="nav-drawer">
+  <button class="nav-drawer-close" id="nav-drawer-close">&times;</button>
+  {% if current_user.is_authenticated %}
+    <div class="nav-user" id="nav-username-display">{{ current_user.username or current_user.email }}</div>
+    <a href="/">Card Search</a>
+    <a href="{{ url_for('deck_new') }}">Deck Builder</a>
+    <a href="{{ url_for('deck_list') }}">Browse Decks</a>
+    <a href="{{ url_for('print_page') }}">Card Print</a>
+    <div class="nav-sep"></div>
+    <a href="#" id="nav-profile-btn">Profile</a>
+    <a href="{{ url_for('user_logout') }}">Logout</a>
+  {% else %}
+    <a href="/">Card Search</a>
+    <a href="{{ url_for('deck_list') }}">Browse Decks</a>
+    <a href="{{ url_for('print_page') }}">Card Print</a>
+    <div class="nav-sep"></div>
+    <a href="{{ url_for('user_login') }}">Login</a>
+    <a href="{{ url_for('user_signup') }}">Sign up</a>
+  {% endif %}
+</nav>
+
+{% if current_user.is_authenticated %}
+<div id="profile-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2500;"></div>
+<div id="profile-modal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;padding:28px 28px 20px;width:340px;max-width:92vw;z-index:2600;box-shadow:0 8px 32px rgba(0,0,0,.18);">
+  <h3 style="margin:0 0 16px;font-size:1.1em;">Profile</h3>
+  <label style="font-size:.88em;color:#555;display:block;margin-bottom:4px;">Username</label>
+  <input id="profile-username-input" type="text" style="width:100%;padding:9px 12px;border:1.5px solid #bbb;border-radius:8px;font-size:.95em;box-sizing:border-box;margin-bottom:12px;" placeholder="Enter username">
+  <div id="profile-msg" style="font-size:.82em;min-height:18px;margin-bottom:10px;"></div>
+  <div style="display:flex;gap:10px;justify-content:flex-end;">
+    <button id="profile-cancel-btn" style="padding:8px 20px;border:1px solid #bbb;border-radius:8px;background:#f5f5f5;cursor:pointer;font-size:.9em;">Cancel</button>
+    <button id="profile-save-btn" style="padding:8px 20px;border:none;border-radius:8px;background:#2b6cff;color:#fff;font-weight:700;cursor:pointer;font-size:.9em;">Save</button>
+  </div>
+</div>
+{% endif %}
+
+<!-- App -->
+<div class="app">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-hdr">🖨 Card Print</div>
+    <div class="sidebar-body">
+
+      <!-- Settings -->
+      <div class="sg">
+        <label>Paper Size</label>
+        <select id="paper-size">
+          <option value="a4">A4 (210×297mm)</option>
+          <option value="letter">Letter (216×279mm)</option>
+          <option value="a3">A3 (297×420mm)</option>
+        </select>
+      </div>
+      <div class="sg-row">
+        <div class="sg">
+          <label>Orientation</label>
+          <select id="orientation">
+            <option value="portrait">Portrait</option>
+            <option value="landscape">Landscape</option>
+          </select>
+        </div>
+        <div class="sg">
+          <label>Margin (mm)</label>
+          <input type="number" id="margin" value="5" min="0" max="20" step="1">
+        </div>
+      </div>
+      <div class="sg">
+        <label>Card Size</label>
+        <select id="card-size">
+          <option value="standard">Standard (63×88mm) — DM, MTG, Pokémon, etc.</option>
+          <option value="small">Small (44×63mm) — Yu-Gi-Oh, Vanguard, etc.</option>
+        </select>
+      </div>
+
+      <hr class="sdiv">
+
+      <div id="total-label">0 images · 0 pages</div>
+      <div id="print-card-list">
+        <div class="pi-empty">No cards yet.<br>Click "Add Cards" to start.</div>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <button class="btn-add" id="btn-add">+ Add Cards</button>
+      <button class="btn-clear-all" id="btn-clear-all">🗑 Clear All</button>
+      <div class="pgcount" id="pgcount"></div>
+      <button class="btn-print" id="btn-print">🖨 Print / Save as PDF</button>
+    </div>
+  </div>
+
+  <!-- Preview -->
+  <div class="main" id="print-main">
+    <div class="preview-hint" id="preview-hint">
+      <span class="hint-icon">🖨</span>
+      Add cards to see the print preview
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== Constants =====
+const PAPER = {
+  a4:     {w:210, h:297},
+  letter: {w:216, h:279},
+  a3:     {w:297, h:420},
+};
+const CARD = {
+  standard: {w:63, h:88},
+  small:    {w:44, h:63},
+};
+const PX_PER_MM = 2.6; // preview scale
+
+// ===== State =====
+let printList = [];
+
+function load() {
+  try { printList = JSON.parse(sessionStorage.getItem('printList') || '[]'); } catch(e) { printList = []; }
+}
+function save() { sessionStorage.setItem('printList', JSON.stringify(printList)); }
+
+// ===== Settings helpers =====
+function paperSize() {
+  const p = PAPER[document.getElementById('paper-size').value] || PAPER.a4;
+  return document.getElementById('orientation').value === 'landscape' ? {w:p.h, h:p.w} : {w:p.w, h:p.h};
+}
+function cardSize() { return CARD[document.getElementById('card-size').value] || CARD.standard; }
+function margin()   { return Math.max(0, parseInt(document.getElementById('margin').value) || 5); }
+
+// ===== Dynamic print CSS =====
+function updatePrintCSS() {
+  const p = paperSize(), c = cardSize(), m = margin();
+  const cols = Math.max(1, Math.floor((p.w - 2*m) / c.w));
+  let el = document.getElementById('dyn-print-css');
+  if (!el) { el = document.createElement('style'); el.id = 'dyn-print-css'; document.head.appendChild(el); }
+  el.textContent = `@media print {
+    @page { size:${p.w}mm ${p.h}mm; margin:0; }
+    .print-page { width:${p.w}mm!important; height:${p.h}mm!important; padding:${m}mm!important; }
+    .pp-inner { grid-template-columns:repeat(${cols},${c.w}mm)!important; gap:0.5mm!important; }
+    .pp-cell  { width:${c.w}mm!important; height:${c.h}mm!important; }
+  }`;
+}
+
+// ===== Flatten printList → array of images =====
+function flatImages() {
+  const out = [];
+  printList.forEach(item => {
+    for (let i = 0; i < item.qty; i++) {
+      out.push({url: item.image_url,  name: item.name});
+      if (item.image_url2) out.push({url: item.image_url2, name: item.name + ' (B)'});
+    }
+  });
+  return out;
+}
+
+// ===== Render preview =====
+function render() {
+  updatePrintCSS();
+  const p = paperSize(), c = cardSize(), m = margin();
+  const cols = Math.max(1, Math.floor((p.w - 2*m) / c.w));
+  const rows = Math.max(1, Math.floor((p.h - 2*m) / c.h));
+  const perPage = cols * rows;
+  const imgs = flatImages();
+  const totalImgs = imgs.length;
+  const totalPages = totalImgs === 0 ? 1 : Math.ceil(totalImgs / perPage);
+
+  // Labels
+  document.getElementById('total-label').textContent =
+    totalImgs + ' image' + (totalImgs !== 1 ? 's' : '') + ' · ' +
+    totalPages + ' page' + (totalPages !== 1 ? 's' : '');
+  document.getElementById('pgcount').textContent = totalPages + ' page(s) will be printed';
+
+  const main = document.getElementById('print-main');
+  const hint = document.getElementById('preview-hint');
+  main.querySelectorAll('.print-page').forEach(e => e.remove());
+
+  if (totalImgs === 0) { hint.style.display = 'block'; renderSidebar(); return; }
+  hint.style.display = 'none';
+
+  const sc = PX_PER_MM;
+  const pw = p.w * sc, ph = p.h * sc;
+  const cw = c.w * sc, ch = c.h * sc;
+  const pad = m * sc;
+
+  for (let pg = 0; pg < totalPages; pg++) {
+    const pageImgs = imgs.slice(pg * perPage, (pg + 1) * perPage);
+    const pageEl = document.createElement('div');
+    pageEl.className = 'print-page';
+    pageEl.style.cssText = `width:${pw}px;height:${ph}px;padding:${pad}px;`;
+
+    const inner = document.createElement('div');
+    inner.className = 'pp-inner';
+    inner.style.cssText = `grid-template-columns:repeat(${cols},${cw}px);gap:1px;`;
+
+    for (let i = 0; i < perPage; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'pp-cell';
+      cell.style.cssText = `width:${cw}px;height:${ch}px;`;
+      if (i < pageImgs.length) {
+        const img = document.createElement('img');
+        img.src = pageImgs[i].url; img.alt = pageImgs[i].name; img.loading = 'lazy';
+        cell.appendChild(img);
+      }
+      inner.appendChild(cell);
+    }
+    pageEl.appendChild(inner);
+
+    const pgNum = document.createElement('div');
+    pgNum.className = 'pp-num';
+    pgNum.textContent = (pg + 1) + ' / ' + totalPages;
+    pageEl.appendChild(pgNum);
+    main.appendChild(pageEl);
+  }
+  renderSidebar();
+}
+
+// ===== Sidebar card list =====
+function renderSidebar() {
+  const list = document.getElementById('print-card-list');
+  if (printList.length === 0) {
+    list.innerHTML = '<div class="pi-empty">No cards yet.<br>Click "Add Cards" to start.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  printList.forEach((item, idx) => {
+    const div = document.createElement('div'); div.className = 'pi';
+    // Thumb
+    const img = document.createElement('img'); img.className = 'pi-thumb';
+    img.src = item.image_url; img.alt = item.name; div.appendChild(img);
+    // Info
+    const info = document.createElement('div'); info.className = 'pi-info';
+    const nm = document.createElement('div'); nm.className = 'pi-name'; nm.textContent = item.name; info.appendChild(nm);
+    if (item.image_url2) {
+      const tw = document.createElement('div'); tw.className = 'pi-twin'; tw.textContent = '↳ + B-side image'; info.appendChild(tw);
+    }
+    // Qty controls
+    const qr = document.createElement('div'); qr.className = 'pi-qty';
+    const minus = document.createElement('button'); minus.className = 'pq-btn'; minus.textContent = '−';
+    minus.addEventListener('click', () => changeQty(idx, -1));
+    const val = document.createElement('span'); val.className = 'pq-val'; val.textContent = item.qty;
+    const plus = document.createElement('button'); plus.className = 'pq-btn'; plus.textContent = '+';
+    plus.addEventListener('click', () => changeQty(idx, +1));
+    qr.append(minus, val, plus); info.appendChild(qr);
+    div.appendChild(info);
+    // Trash
+    const tr = document.createElement('button'); tr.className = 'pi-trash'; tr.innerHTML = '🗑';
+    tr.title = 'Remove'; tr.addEventListener('click', () => { printList.splice(idx, 1); save(); render(); });
+    div.appendChild(tr);
+    list.appendChild(div);
+  });
+}
+
+function changeQty(idx, delta) {
+  printList[idx].qty = Math.max(0, printList[idx].qty + delta);
+  if (printList[idx].qty === 0) printList.splice(idx, 1);
+  save(); render();
+}
+
+// ===== Event listeners =====
+document.getElementById('btn-add').addEventListener('click', () => {
+  window.location.href = '/print/search';
+});
+document.getElementById('btn-clear-all').addEventListener('click', () => {
+  if (printList.length === 0) return;
+  if (confirm('Clear all cards from the print list?')) {
+    printList = [];
+    save();
+    render();
+  }
+});
+document.getElementById('btn-print').addEventListener('click', () => {
+  updatePrintCSS();
+  window.print();
+});
+['paper-size','orientation','card-size','margin'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('change', render);
+  if (id === 'margin') el.addEventListener('input', render);
+});
+
+// ===== Hamburger =====
+(function(){
+  const btn = document.getElementById('hamburger-btn');
+  const overlay = document.getElementById('nav-overlay');
+  const drawer = document.getElementById('nav-drawer');
+  const closeBtn = document.getElementById('nav-drawer-close');
+  if (!btn) return;
+  const open = () => { overlay.classList.add('open'); drawer.classList.add('open'); };
+  const close = () => { overlay.classList.remove('open'); drawer.classList.remove('open'); };
+  btn.addEventListener('click', open);
+  overlay.addEventListener('click', close);
+  closeBtn.addEventListener('click', close);
+})();
+
+// ===== Profile modal =====
+(function(){
+  const profileBtn = document.getElementById('nav-profile-btn');
+  if (!profileBtn) return;
+  const mo = document.getElementById('profile-modal-overlay');
+  const modal = document.getElementById('profile-modal');
+  const uInput = document.getElementById('profile-username-input');
+  const saveBtn = document.getElementById('profile-save-btn');
+  const cancelBtn = document.getElementById('profile-cancel-btn');
+  const msgDiv = document.getElementById('profile-msg');
+  const navUD = document.getElementById('nav-username-display');
+  function openP(){
+    document.getElementById('nav-overlay').classList.remove('open');
+    document.getElementById('nav-drawer').classList.remove('open');
+    msgDiv.textContent = ''; uInput.value = '';
+    mo.style.display = 'block'; modal.style.display = 'block';
+    fetch('/api/profile').then(r=>r.json()).then(d=>{ if(d.ok) uInput.value = d.username||d.email||''; });
+  }
+  function closeP(){ mo.style.display = 'none'; modal.style.display = 'none'; }
+  profileBtn.addEventListener('click', e => { e.preventDefault(); openP(); });
+  mo.addEventListener('click', closeP);
+  cancelBtn.addEventListener('click', closeP);
+  saveBtn.addEventListener('click', () => {
+    const val = uInput.value.trim();
+    if (!val) { msgDiv.style.color='#d44'; msgDiv.textContent='Username cannot be empty.'; return; }
+    saveBtn.disabled = true;
+    fetch('/api/profile/update', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:val})})
+    .then(r=>r.json()).then(d=>{
+      saveBtn.disabled = false;
+      if (d.ok) { msgDiv.style.color='#2a9d2a'; msgDiv.textContent='Saved!';
+        if (navUD) navUD.textContent = d.username; setTimeout(closeP, 800); }
+      else { msgDiv.style.color='#d44'; msgDiv.textContent = d.error||'Error.'; }
+    }).catch(() => { saveBtn.disabled=false; msgDiv.style.color='#d44'; msgDiv.textContent='Network error.'; });
+  });
+})();
+
+// ===== Init =====
+load();
+render();
+</script>
+</body>
+</html>

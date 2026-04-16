@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Browse Decks - Duel Masters</title>
+<style>
+*{box-sizing:border-box;}
+body{font-family:Arial,sans-serif;margin:0;padding:20px;background:#fafafa;}
+h1{text-align:center;margin-bottom:6px;}
+.center{text-align:center;}
+
+/* Tabs */
+.tabs{display:flex;justify-content:center;gap:0;margin-bottom:16px;}
+.tab-btn{padding:10px 28px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:.92em;font-weight:600;transition:background .15s;}
+.tab-btn:first-child{border-radius:8px 0 0 8px;}
+.tab-btn:last-child{border-radius:0 8px 8px 0;}
+.tab-btn.active{background:#2b6cff;color:#fff;border-color:#2b6cff;}
+
+/* ===== Search area ===== */
+.search-area{max-width:760px;margin:0 auto 16px;}
+
+/* Keyword row */
+.kw-row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:8px;}
+.kw-row input[type=text]{width:260px;max-width:55vw;padding:8px 12px;border:1px solid #bbb;border-radius:8px;font-size:.9em;}
+.kw-row select{padding:8px 10px;border:1px solid #bbb;border-radius:8px;font-size:.9em;}
+
+/* Search target checkboxes */
+.search-targets{display:flex;justify-content:center;align-items:center;gap:14px;margin:4px 0 10px;flex-wrap:wrap;}
+.search-targets-label{font-size:.85em;color:#666;font-weight:600;}
+.search-target-cb{display:inline-flex;align-items:center;gap:5px;font-size:.85em;cursor:pointer;user-select:none;color:#333;}
+.search-target-cb input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:#111;}
+
+/* Civilization filter */
+.civ-filter{margin:10px 0 6px;}
+.civ-filter-label{font-size:.85em;color:#666;font-weight:600;text-align:center;margin-bottom:6px;}
+.civ-icons-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}
+.civ-icon-wrap{display:flex;flex-direction:column;align-items:center;width:52px;}
+.civ-icon{width:44px;height:44px;background-size:cover;background-position:center;border:2px solid #ccc;border-radius:8px;cursor:pointer;background-color:#f2f2f2;transition:transform .15s,border-color .15s;}
+.civ-icon:hover{transform:scale(1.05);border-color:#888;}
+.civ-icon.selected{border-color:#ff4444;box-shadow:0 0 6px rgba(255,80,80,.5);}
+.civ-icon-label{font-size:.65em;margin-top:2px;text-align:center;}
+
+/* Date range */
+.date-row{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin:6px 0 10px;}
+.date-row label{font-size:.85em;color:#666;font-weight:600;}
+.date-row input[type=text]{width:120px;padding:6px 10px;border:1px solid #bbb;border-radius:8px;font-size:.88em;}
+.date-sep{color:#888;}
+
+/* Card name search */
+.card-kw-row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:10px;}
+.card-kw-row input[type=text]{width:260px;max-width:55vw;padding:8px 12px;border:1px solid #bbb;border-radius:8px;font-size:.9em;}
+
+/* Search button */
+.search-btn-row{text-align:center;margin:6px 0 0;}
+.search-btn{padding:9px 36px;border:none;border-radius:8px;background:#2b6cff;color:#fff;font-weight:700;cursor:pointer;font-size:.95em;}
+.search-btn:hover{background:#1a55d0;}
+
+/* Deck grid */
+.deck-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;max-width:1000px;margin:0 auto;}
+.deck-card{background:#fff;border-radius:12px;box-shadow:0 1px 8px rgba(0,0,0,.08);overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s;text-decoration:none;color:inherit;position:relative;}
+.deck-card:hover{transform:translateY(-3px);box-shadow:0 4px 16px rgba(0,0,0,.13);}
+.deck-cover{width:100%;aspect-ratio:5/3;object-fit:cover;background:#eee;display:block;}
+.deck-info{padding:10px 14px 6px;}
+.deck-info h3{margin:0 0 4px;font-size:1em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.deck-meta{font-size:.78em;color:#888;}
+.deck-civs{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;}
+/* Like/bookmark bar */
+.deck-actions-bar{display:flex;align-items:center;gap:6px;padding:6px 14px 10px;border-top:1px solid #f5f5f5;margin-top:4px;}
+.like-btn,.bm-btn{background:none;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:20px;transition:background .15s;}
+.like-btn:hover{background:#fff0f5;}
+.bm-btn:hover{background:#f0f5ff;}
+.like-btn img,.bm-btn img{width:22px;height:22px;object-fit:contain;display:block;}
+.like-count{font-size:.82em;color:#888;margin-left:2px;}
+
+/* Sort and filter row */
+.sort-filter-row{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:0 auto 12px;max-width:760px;}
+.sort-filter-row label{font-size:.85em;color:#555;display:inline-flex;align-items:center;gap:5px;cursor:pointer;}
+.sort-filter-row select{padding:6px 10px;border:1px solid #bbb;border-radius:8px;font-size:.88em;}
+.civ-tag{padding:2px 8px;border-radius:12px;font-size:.7em;font-weight:700;}
+
+/* 6 canonical civilization colors */
+.civ-tag-Fire{background:#d44;color:#fff;}
+.civ-tag-Water{background:#38c;color:#fff;}
+.civ-tag-Nature{background:#3a3;color:#fff;}
+.civ-tag-Light{background:#da2;color:#fff;}
+.civ-tag-Darkness{background:#555;color:#fff;}
+.civ-tag-Colorless{background:#fff;color:#111;border:1.5px solid #111;}
+
+.no-decks{text-align:center;color:#aaa;padding:40px 0;}
+.pagination{display:flex;justify-content:center;gap:6px;margin:20px 0;flex-wrap:wrap;}
+.pagination a,.pagination span{padding:6px 11px;border-radius:6px;font-size:.85em;text-decoration:none;}
+.pagination a{border:1px solid #bbb;color:#333;} .pagination a:hover{background:#eee;}
+.pagination .current{background:#2b6cff;color:#fff;border:1px solid #2b6cff;}
+
+.back-link{display:block;text-align:center;margin-top:20px;font-size:.85em;color:#888;text-decoration:none;}
+.back-link:hover{color:#555;}
+
+/* ===== Hamburger menu ===== */
+.hamburger-btn{position:fixed;top:14px;right:18px;z-index:1100;background:#fff;border:1px solid #ccc;border-radius:8px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:22px;color:#333;box-shadow:0 1px 6px rgba(0,0,0,.10);transition:background .2s;line-height:1;}
+.hamburger-btn:hover{background:#f0f0f0;}
+.nav-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:1200;}
+.nav-overlay.open{display:block;}
+.nav-drawer{position:fixed;top:0;right:-280px;width:270px;height:100%;background:#fff;z-index:1300;box-shadow:-2px 0 16px rgba(0,0,0,.15);transition:right .25s ease;display:flex;flex-direction:column;padding:20px 0;}
+.nav-drawer.open{right:0;}
+.nav-drawer-close{align-self:flex-end;background:none;border:none;font-size:24px;cursor:pointer;padding:0 20px 10px;color:#666;}
+.nav-drawer .nav-user{padding:8px 24px 16px;font-size:.85em;color:#888;border-bottom:1px solid #eee;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.nav-drawer a{display:block;padding:13px 24px;color:#333;text-decoration:none;font-size:.95em;transition:background .15s;}
+.nav-drawer a:hover{background:#f5f5f5;}
+.nav-drawer .nav-sep{height:1px;background:#eee;margin:8px 16px;}
+</style>
+</head>
+<body>
+
+<!-- Hamburger menu -->
+<button class="hamburger-btn" id="hamburger-btn" aria-label="Menu">&#9776;</button>
+<div class="nav-overlay" id="nav-overlay"></div>
+<nav class="nav-drawer" id="nav-drawer">
+    <button class="nav-drawer-close" id="nav-drawer-close">&times;</button>
+    {% if current_user.is_authenticated %}
+        <div class="nav-user" id="nav-username-display">{{ current_user.username or current_user.email }}</div>
+        <a href="/">Card Search</a>
+        <a href="{{ url_for('deck_new') }}">Deck Builder</a>
+        <a href="{{ url_for('deck_list') }}">Browse Decks</a>
+        <a href="{{ url_for('print_page') }}">Card Print</a>
+        <div class="nav-sep"></div>
+        <a href="#" id="nav-profile-btn">Profile</a>
+        <a href="{{ url_for('user_logout') }}">Logout</a>
+    {% else %}
+        <a href="/">Card Search</a>
+        <a href="{{ url_for('deck_list') }}">Browse Decks</a>
+        <a href="{{ url_for('print_page') }}">Card Print</a>
+        <div class="nav-sep"></div>
+        <a href="{{ url_for('user_login') }}">Login</a>
+        <a href="{{ url_for('user_signup') }}">Sign up</a>
+    {% endif %}
+</nav>
+
+{% if current_user.is_authenticated %}
+<!-- Profile modal -->
+<div id="profile-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2500;"></div>
+<div id="profile-modal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;padding:28px 28px 20px;width:340px;max-width:92vw;z-index:2600;box-shadow:0 8px 32px rgba(0,0,0,.18);">
+    <h3 style="margin:0 0 16px;font-size:1.1em;">Profile</h3>
+    <label style="font-size:.88em;color:#555;display:block;margin-bottom:4px;">Username</label>
+    <input id="profile-username-input" type="text" style="width:100%;padding:9px 12px;border:1.5px solid #bbb;border-radius:8px;font-size:.95em;box-sizing:border-box;margin-bottom:12px;" placeholder="Enter username">
+    <div id="profile-msg" style="font-size:.82em;min-height:18px;margin-bottom:10px;"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button id="profile-cancel-btn" style="padding:8px 20px;border:1px solid #bbb;border-radius:8px;background:#f5f5f5;cursor:pointer;font-size:.9em;">Cancel</button>
+        <button id="profile-save-btn" style="padding:8px 20px;border:none;border-radius:8px;background:#2b6cff;color:#fff;font-weight:700;cursor:pointer;font-size:.9em;">Save</button>
+    </div>
+</div>
+{% endif %}
+
+<h1>Browse Decks</h1>
+
+<div class="tabs">
+    <button class="tab-btn active" id="tab-public">Public Decks</button>
+    <button class="tab-btn" id="tab-my">My Decks</button>
+</div>
+
+<!-- ===== Search area ===== -->
+<div class="search-area">
+
+    <!-- Keyword + format -->
+    <div class="kw-row">
+        <input type="text" id="kw-input" placeholder="Keyword search...">
+        <select id="fmt-select">
+            <option value="">All Formats</option>
+            <option value="original">Original</option>
+            <option value="advanced">Advanced</option>
+            <option value="free">Free</option>
+        </select>
+    </div>
+
+    <!-- Search target checkboxes -->
+    <div class="search-targets">
+        <span class="search-targets-label">Search in:</span>
+        <label class="search-target-cb"><input type="checkbox" id="st-deckname" checked> Deck Name</label>
+        <label class="search-target-cb"><input type="checkbox" id="st-desc" checked> Description</label>
+        <label class="search-target-cb"><input type="checkbox" id="st-card"> Card Name</label>
+        <label class="search-target-cb"><input type="checkbox" id="st-username"> Username</label>
+    </div>
+
+    <!-- Civilization filter -->
+    <div class="civ-filter">
+        <div class="civ-filter-label">Filter by Civilization</div>
+        <div class="civ-icons-row">
+            {% for civ in ['Fire','Water','Nature','Light','Darkness','Colorless'] %}
+            <div class="civ-icon-wrap">
+                <div class="civ-icon"
+                     style="background-image:url('/static/icons/{{ civ|lower }}.png');"
+                     data-civ="{{ civ }}" title="{{ civ }}"></div>
+                <div class="civ-icon-label">{{ civ }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Date range (YYYY/MM/DD) -->
+    <div class="date-row">
+        <label>Date:</label>
+        <input type="text" id="date-from" placeholder="YYYY/MM/DD">
+        <span class="date-sep">～</span>
+        <input type="text" id="date-to" placeholder="YYYY/MM/DD">
+    </div>
+
+    <div class="search-btn-row">
+        <button class="search-btn" id="deck-search-btn">Search</button>
+    </div>
+</div>
+
+<!-- Sort + filter row -->
+<div class="sort-filter-row">
+    <label>Sort:
+        <select id="sort-select">
+            <option value="newest">Newest</option>
+            <option value="likes">Most Liked</option>
+        </select>
+    </label>
+    {% if current_user.is_authenticated %}
+    <label><input type="checkbox" id="filter-liked"> ♡ Liked</label>
+    <label><input type="checkbox" id="filter-bookmarked"> 🔖 Bookmarked</label>
+    {% endif %}
+</div>
+
+<div class="deck-grid" id="deck-grid"></div>
+<div class="pagination" id="pagination"></div>
+<div class="no-decks" id="no-decks" style="display:none;">No decks found.</div>
+
+<a href="/" class="back-link">← Back to card search</a>
+
+<script>
+(function(){
+    let mode = 'public';
+    let page = 1;
+    const civSelected = new Set();
+
+    const tabPublic = document.getElementById('tab-public');
+    const tabMy = document.getElementById('tab-my');
+
+    tabPublic.addEventListener('click',()=>{ mode='public'; page=1; setActiveTab(); load(); });
+    tabMy.addEventListener('click',()=>{ mode='my'; page=1; setActiveTab(); load(); });
+    document.getElementById('deck-search-btn').addEventListener('click',()=>{ page=1; load(); });
+
+    // Allow Enter key in text inputs to trigger search
+    ['kw-input','date-from','date-to'].forEach(id=>{
+        const el=document.getElementById(id);
+        if(el) el.addEventListener('keydown',(e)=>{ if(e.key==='Enter'){ page=1; load(); } });
+    });
+
+    function setActiveTab(){
+        tabPublic.classList.toggle('active', mode==='public');
+        tabMy.classList.toggle('active', mode==='my');
+    }
+
+    // Civilization icons toggle
+    document.querySelectorAll('.civ-icon').forEach(icon=>{
+        icon.addEventListener('click',()=>{
+            const v=icon.dataset.civ;
+            if(civSelected.has(v)){ civSelected.delete(v); icon.classList.remove('selected'); }
+            else { civSelected.add(v); icon.classList.add('selected'); }
+        });
+    });
+
+    function load(){
+        const kw = document.getElementById('kw-input').value.trim();
+        const fmt = document.getElementById('fmt-select').value;
+        const dateFrom = document.getElementById('date-from').value.trim();
+        const dateTo = document.getElementById('date-to').value.trim();
+        const stDeckName = document.getElementById('st-deckname').checked;
+        const stDesc = document.getElementById('st-desc').checked;
+        const stCard = document.getElementById('st-card').checked;
+        const stUsername = document.getElementById('st-username').checked;
+        const sortBy = document.getElementById('sort-select').value;
+        const filterLikedEl = document.getElementById('filter-liked');
+        const filterBmEl = document.getElementById('filter-bookmarked');
+        const filterLiked = filterLikedEl && filterLikedEl.checked ? '1' : '0';
+        const filterBm = filterBmEl && filterBmEl.checked ? '1' : '0';
+
+        let url = '/api/decks?mode='+mode+'&page='+page;
+        if(kw) url+='&keyword='+encodeURIComponent(kw);
+        if(fmt) url+='&format='+fmt;
+        // When "Card Name" is checked, use the same keyword for card name search
+        if(kw && stCard) url+='&card_keyword='+encodeURIComponent(kw);
+        if(dateFrom) url+='&date_from='+encodeURIComponent(dateFrom);
+        if(dateTo) url+='&date_to='+encodeURIComponent(dateTo);
+        if(civSelected.size>0) url+='&civilizations='+encodeURIComponent([...civSelected].join(','));
+        // Search targets flags
+        if(!stDeckName) url+='&st_name=0';
+        if(!stDesc) url+='&st_desc=0';
+        if(stCard) url+='&st_card=1';
+        if(stUsername) url+='&st_username=1';
+        // Sort and filter
+        url += '&sort_by=' + sortBy;
+        if(filterLiked === '1') url += '&filter_liked=1';
+        if(filterBm === '1') url += '&filter_bookmarked=1';
+
+        fetch(url).then(r=>r.json()).then(render);
+    }
+
+    function render(data){
+        const grid = document.getElementById('deck-grid');
+        const noDecks = document.getElementById('no-decks');
+        grid.innerHTML='';
+        if(!data.decks||data.decks.length===0){
+            noDecks.style.display='block';
+            document.getElementById('pagination').innerHTML='';
+            return;
+        }
+        noDecks.style.display='none';
+
+        data.decks.forEach(d=>{
+            const a = document.createElement('a');
+            a.className='deck-card';
+            a.href='/deck/'+d.id;
+
+            let coverHtml = '';
+            if(d.cover_image_url){
+                coverHtml = '<img class="deck-cover" src="'+d.cover_image_url+'" alt="">';
+            } else {
+                coverHtml = '<div class="deck-cover" style="display:flex;align-items:center;justify-content:center;color:#ccc;font-size:2em;">&#x1F0CF;</div>';
+            }
+
+            const fmtLabel = (d.format||'').charAt(0).toUpperCase()+(d.format||'').slice(1);
+            const dateStr = d.created_at ? new Date(d.created_at).toLocaleDateString() : '';
+            const creatorName = d.creator_username || '';
+
+            // Build civilization tags from the deck's civ list (sent by server)
+            let civTagsHtml = '';
+            if(d.civilizations && d.civilizations.length>0){
+                civTagsHtml = '<div class="deck-civs">';
+                d.civilizations.forEach(civ=>{
+                    civTagsHtml += '<span class="civ-tag civ-tag-'+escHtml(civ)+'">'+escHtml(civ)+'</span>';
+                });
+                civTagsHtml += '</div>';
+            }
+
+            const creatorHtml = creatorName
+                ? '<div class="deck-creator" style="font-size:.72em;color:#aaa;margin-top:3px;">by '+escHtml(creatorName)+'</div>'
+                : '';
+
+            a.innerHTML = coverHtml +
+                '<div class="deck-info">' +
+                '<h3>'+escHtml(d.name||'Deck')+'</h3>' +
+                '<div class="deck-meta">'+fmtLabel+' · '+dateStr+'</div>' +
+                creatorHtml +
+                civTagsHtml +
+                '</div>';
+
+            // Like / Bookmark bar
+            const bar = document.createElement('div');
+            bar.className = 'deck-actions-bar';
+
+            const HEART_OFF = '/static/icons/ハートのマーク2.jpeg';
+            const HEART_ON  = '/static/icons/ハートのマーク.jpeg';
+            const BM_OFF    = '/static/icons/ブックマークのアイコン4.jpeg';
+            const BM_ON     = '/static/icons/ブックマークの無料アイコン1.jpeg';
+
+            const likeBtn = document.createElement('button');
+            likeBtn.className = 'like-btn';
+            likeBtn.dataset.deckId = d.id;
+            const likeCount = d.like_count || 0;
+            likeBtn.innerHTML = '<img src="' + (d.is_liked ? HEART_ON : HEART_OFF) + '" alt="like"> <span class="like-count">' + likeCount + '</span>';
+            likeBtn.title = 'Like';
+            likeBtn.addEventListener('click', e => {
+                e.preventDefault(); e.stopPropagation();
+                toggleLike(d.id, likeBtn);
+            });
+
+            const bmBtn = document.createElement('button');
+            bmBtn.className = 'bm-btn';
+            bmBtn.dataset.deckId = d.id;
+            bmBtn.innerHTML = '<img src="' + (d.is_bookmarked ? BM_ON : BM_OFF) + '" alt="bookmark">';
+            bmBtn.title = 'Bookmark';
+            bmBtn.addEventListener('click', e => {
+                e.preventDefault(); e.stopPropagation();
+                toggleBookmark(d.id, bmBtn);
+            });
+
+            bar.appendChild(likeBtn);
+            bar.appendChild(bmBtn);
+            a.appendChild(bar);
+
+            grid.appendChild(a);
+        });
+
+        // Pagination
+        const pDiv = document.getElementById('pagination');
+        pDiv.innerHTML='';
+        if(data.pages>1){
+            for(let p=1;p<=data.pages;p++){
+                if(p===data.page){
+                    const s=document.createElement('span');s.className='current';s.textContent=p;pDiv.appendChild(s);
+                } else {
+                    const link=document.createElement('a');link.href='#';link.textContent=p;
+                    link.addEventListener('click',e=>{e.preventDefault();page=p;load();});
+                    pDiv.appendChild(link);
+                }
+            }
+        }
+    }
+
+    function escHtml(s){ const d=document.createElement('div');d.textContent=s;return d.innerHTML; }
+
+    const HEART_OFF = '/static/icons/ハートのマーク2.jpeg';
+    const HEART_ON  = '/static/icons/ハートのマーク.jpeg';
+    const BM_OFF    = '/static/icons/ブックマークのアイコン4.jpeg';
+    const BM_ON     = '/static/icons/ブックマークの無料アイコン1.jpeg';
+
+    function toggleLike(deckId, btn){
+        fetch('/api/deck/'+deckId+'/like', {method:'POST'})
+        .then(r=>r.json()).then(data=>{
+            if(data.error){
+                if(data.error==='Login required') alert('Please login to like decks.');
+                return;
+            }
+            const img = btn.querySelector('img');
+            if(img) img.src = data.liked ? HEART_ON : HEART_OFF;
+            const countEl = btn.querySelector('.like-count');
+            if(countEl) countEl.textContent = data.like_count !== undefined ? data.like_count : '';
+        }).catch(()=>{});
+    }
+
+    function toggleBookmark(deckId, btn){
+        fetch('/api/deck/'+deckId+'/bookmark', {method:'POST'})
+        .then(r=>r.json()).then(data=>{
+            if(data.error){
+                if(data.error==='Login required') alert('Please login to bookmark decks.');
+                return;
+            }
+            const img = btn.querySelector('img');
+            if(img) img.src = data.bookmarked ? BM_ON : BM_OFF;
+        }).catch(()=>{});
+    }
+
+    // Re-load when sort or filter changes
+    const sortSel = document.getElementById('sort-select');
+    if(sortSel) sortSel.addEventListener('change', ()=>{ page=1; load(); });
+    const filterLikedEl = document.getElementById('filter-liked');
+    if(filterLikedEl) filterLikedEl.addEventListener('change', ()=>{ page=1; load(); });
+    const filterBmEl = document.getElementById('filter-bookmarked');
+    if(filterBmEl) filterBmEl.addEventListener('change', ()=>{ page=1; load(); });
+
+    load();
+})();
+
+// ===== Hamburger menu =====
+(function(){
+    const btn=document.getElementById('hamburger-btn');
+    const overlay=document.getElementById('nav-overlay');
+    const drawer=document.getElementById('nav-drawer');
+    const closeBtn=document.getElementById('nav-drawer-close');
+    if(!btn) return;
+    function openMenu(){ overlay.classList.add('open'); drawer.classList.add('open'); }
+    function closeMenu(){ overlay.classList.remove('open'); drawer.classList.remove('open'); }
+    btn.addEventListener('click', openMenu);
+    overlay.addEventListener('click', closeMenu);
+    closeBtn.addEventListener('click', closeMenu);
+})();
+
+// ===== Profile modal =====
+(function(){
+    const profileBtn=document.getElementById('nav-profile-btn');
+    if(!profileBtn) return;
+    const modalOverlay=document.getElementById('profile-modal-overlay');
+    const modal=document.getElementById('profile-modal');
+    const usernameInput=document.getElementById('profile-username-input');
+    const saveBtn=document.getElementById('profile-save-btn');
+    const cancelBtn=document.getElementById('profile-cancel-btn');
+    const msgDiv=document.getElementById('profile-msg');
+    const navUserDisplay=document.getElementById('nav-username-display');
+    function openProfile(){
+        document.getElementById('nav-overlay').classList.remove('open');
+        document.getElementById('nav-drawer').classList.remove('open');
+        msgDiv.textContent=''; usernameInput.value='';
+        modalOverlay.style.display='block'; modal.style.display='block';
+        fetch('/api/profile').then(r=>r.json()).then(data=>{
+            if(data.ok) usernameInput.value=data.username||data.email||'';
+        });
+    }
+    function closeProfile(){ modalOverlay.style.display='none'; modal.style.display='none'; }
+    profileBtn.addEventListener('click',(e)=>{ e.preventDefault(); openProfile(); });
+    modalOverlay.addEventListener('click', closeProfile);
+    cancelBtn.addEventListener('click', closeProfile);
+    saveBtn.addEventListener('click',()=>{
+        const val=usernameInput.value.trim();
+        if(!val){ msgDiv.style.color='#d44'; msgDiv.textContent='Username cannot be empty.'; return; }
+        saveBtn.disabled=true;
+        fetch('/api/profile/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:val})})
+        .then(r=>r.json()).then(data=>{
+            saveBtn.disabled=false;
+            if(data.ok){ msgDiv.style.color='#2a9d2a'; msgDiv.textContent='Saved!';
+                if(navUserDisplay) navUserDisplay.textContent=data.username;
+                setTimeout(closeProfile, 800); }
+            else{ msgDiv.style.color='#d44'; msgDiv.textContent=data.error||'Error saving.'; }
+        }).catch(()=>{ saveBtn.disabled=false; msgDiv.style.color='#d44'; msgDiv.textContent='Network error.'; });
+    });
+})();
+</script>
+</body>
+</html>

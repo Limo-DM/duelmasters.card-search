@@ -563,35 +563,88 @@
         }
     }
 
-/* ===== ユーザーバー ===== */
-    .user-bar {
-        position: absolute;
+/* ===== ハンバーガーメニュー ===== */
+    .hamburger-btn {
+        position: fixed;
         top: 14px;
-        right: 20px;
+        right: 18px;
+        z-index: 1100;
+        background: #fff;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        width: 40px;
+        height: 40px;
         display: flex;
         align-items: center;
-        gap: 10px;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 22px;
+        color: #333;
+        box-shadow: 0 1px 6px rgba(0,0,0,0.10);
+        transition: background 0.2s;
+        line-height: 1;
+    }
+    .hamburger-btn:hover { background: #f0f0f0; }
+
+    .nav-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.3);
+        z-index: 1200;
+    }
+    .nav-overlay.open { display: block; }
+
+    .nav-drawer {
+        position: fixed;
+        top: 0;
+        right: -280px;
+        width: 270px;
+        height: 100%;
+        background: #fff;
+        z-index: 1300;
+        box-shadow: -2px 0 16px rgba(0,0,0,0.15);
+        transition: right 0.25s ease;
+        display: flex;
+        flex-direction: column;
+        padding: 20px 0;
+    }
+    .nav-drawer.open { right: 0; }
+
+    .nav-drawer-close {
+        align-self: flex-end;
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        padding: 0 20px 10px;
+        color: #666;
+    }
+
+    .nav-drawer .nav-user {
+        padding: 8px 24px 16px;
         font-size: 0.85em;
-        color: #555;
-    }
-    .user-bar a {
-        color: #2b6cff;
-        text-decoration: none;
-        padding: 4px 10px;
-        border: 1px solid #2b6cff;
-        border-radius: 6px;
-        transition: background 0.2s, color 0.2s;
-    }
-    .user-bar a:hover {
-        background: #2b6cff;
-        color: #fff;
-    }
-    .user-bar .user-email {
-        max-width: 200px;
+        color: #888;
+        border-bottom: 1px solid #eee;
+        margin-bottom: 8px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        color: #444;
+    }
+
+    .nav-drawer a {
+        display: block;
+        padding: 13px 24px;
+        color: #333;
+        text-decoration: none;
+        font-size: 0.95em;
+        transition: background 0.15s;
+    }
+    .nav-drawer a:hover { background: #f5f5f5; }
+    .nav-drawer .nav-sep {
+        height: 1px;
+        background: #eee;
+        margin: 8px 16px;
     }
     body { position: relative; }
 
@@ -600,18 +653,52 @@
 </head>
 
 <body>
-    <!-- User login status bar -->
-    <div class="user-bar">
+    <!-- Hamburger menu button -->
+    <button class="hamburger-btn" id="hamburger-btn" aria-label="Menu">&#9776;</button>
+
+    <!-- Navigation drawer -->
+    <div class="nav-overlay" id="nav-overlay"></div>
+    <nav class="nav-drawer" id="nav-drawer">
+        <button class="nav-drawer-close" id="nav-drawer-close">&times;</button>
         {% if current_user.is_authenticated %}
-            <span class="user-email">{{ current_user.email }}</span>
+            <div class="nav-user" id="nav-username-display">{{ current_user.username or current_user.email }}</div>
+            <a href="{{ url_for('deck_new') }}">Deck Builder</a>
+            <a href="{{ url_for('deck_list') }}">Browse Decks</a>
+            <a href="{{ url_for('print_page') }}">Card Print</a>
+            <div class="nav-sep"></div>
+            <a href="#" id="nav-profile-btn">Profile</a>
             <a href="{{ url_for('user_logout') }}">Logout</a>
         {% else %}
+            <a href="/">Card Search</a>
+            <a href="{{ url_for('deck_list') }}">Browse Decks</a>
+            <a href="{{ url_for('print_page') }}">Card Print</a>
+            <div class="nav-sep"></div>
             <a href="{{ url_for('user_login') }}">Login</a>
             <a href="{{ url_for('user_signup') }}">Sign up</a>
         {% endif %}
+    </nav>
+
+    {% if current_user.is_authenticated %}
+    <!-- Profile modal -->
+    <div class="profile-modal-overlay" id="profile-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:2000;"></div>
+    <div class="profile-modal" id="profile-modal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;padding:28px 28px 20px;width:340px;max-width:92vw;z-index:2100;box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+        <h3 style="margin:0 0 16px;font-size:1.1em;">Profile</h3>
+        <label style="font-size:.88em;color:#555;display:block;margin-bottom:4px;">Username</label>
+        <input id="profile-username-input" type="text" style="width:100%;padding:9px 12px;border:1.5px solid #bbb;border-radius:8px;font-size:.95em;box-sizing:border-box;margin-bottom:12px;" placeholder="Enter username">
+        <div id="profile-msg" style="font-size:.82em;min-height:18px;margin-bottom:10px;"></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+            <button id="profile-cancel-btn" style="padding:8px 20px;border:1px solid #bbb;border-radius:8px;background:#f5f5f5;cursor:pointer;font-size:.9em;">Cancel</button>
+            <button id="profile-save-btn" style="padding:8px 20px;border:none;border-radius:8px;background:#2b6cff;color:#fff;font-weight:700;cursor:pointer;font-size:.9em;">Save</button>
+        </div>
     </div>
+    {% endif %}
 
     <h1>Card Search</h1>
+
+    <!-- Disclaimer notice -->
+    <div style="max-width:760px;margin:8px auto 14px;padding:10px 16px;background:#fff8e1;border:1.5px solid #f5c518;border-radius:10px;font-size:.82em;color:#7a5c00;line-height:1.6;">
+        ⚠️ <strong>Notice:</strong> Most of the cards on this site are <strong>fan-made</strong> and have been created by modifying official cards without permission. Some cards were edited using AI during the creation process. Please keep this in mind while browsing.
+    </div>
 
     <!-- 🔍 検索フォーム -->
     {% set search_in_vals = request.args.getlist('search_in') %}
@@ -997,6 +1084,67 @@
             sessionStorage.removeItem('lastSearchUrl');
         });
     }
+
+    // ===== Hamburger menu =====
+    (function(){
+        const btn = document.getElementById('hamburger-btn');
+        const overlay = document.getElementById('nav-overlay');
+        const drawer = document.getElementById('nav-drawer');
+        const closeBtn = document.getElementById('nav-drawer-close');
+        function openMenu(){ overlay.classList.add('open'); drawer.classList.add('open'); }
+        function closeMenu(){ overlay.classList.remove('open'); drawer.classList.remove('open'); }
+        btn.addEventListener('click', openMenu);
+        overlay.addEventListener('click', closeMenu);
+        closeBtn.addEventListener('click', closeMenu);
+    })();
+
+    // ===== Profile modal =====
+    (function(){
+        const profileBtn = document.getElementById('nav-profile-btn');
+        if (!profileBtn) return;
+        const modalOverlay = document.getElementById('profile-modal-overlay');
+        const modal = document.getElementById('profile-modal');
+        const usernameInput = document.getElementById('profile-username-input');
+        const saveBtn = document.getElementById('profile-save-btn');
+        const cancelBtn = document.getElementById('profile-cancel-btn');
+        const msgDiv = document.getElementById('profile-msg');
+        const navUserDisplay = document.getElementById('nav-username-display');
+
+        function openProfile(){
+            document.getElementById('nav-overlay').classList.remove('open');
+            document.getElementById('nav-drawer').classList.remove('open');
+            msgDiv.textContent = '';
+            usernameInput.value = '';
+            modalOverlay.style.display = 'block';
+            modal.style.display = 'block';
+            fetch('/api/profile').then(r=>r.json()).then(data=>{
+                if(data.ok) usernameInput.value = data.username || data.email || '';
+            });
+        }
+        function closeProfile(){
+            modalOverlay.style.display = 'none';
+            modal.style.display = 'none';
+        }
+        profileBtn.addEventListener('click', (e)=>{ e.preventDefault(); openProfile(); });
+        modalOverlay.addEventListener('click', closeProfile);
+        cancelBtn.addEventListener('click', closeProfile);
+        saveBtn.addEventListener('click', ()=>{
+            const val = usernameInput.value.trim();
+            if (!val){ msgDiv.style.color='#d44'; msgDiv.textContent='Username cannot be empty.'; return; }
+            saveBtn.disabled = true;
+            fetch('/api/profile/update', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:val})})
+            .then(r=>r.json()).then(data=>{
+                saveBtn.disabled = false;
+                if(data.ok){
+                    msgDiv.style.color='#2a9d2a'; msgDiv.textContent='Saved!';
+                    if(navUserDisplay) navUserDisplay.textContent = data.username;
+                    setTimeout(closeProfile, 800);
+                } else {
+                    msgDiv.style.color='#d44'; msgDiv.textContent = data.error || 'Error saving.';
+                }
+            }).catch(()=>{ saveBtn.disabled=false; msgDiv.style.color='#d44'; msgDiv.textContent='Network error.'; });
+        });
+    })();
     </script>
 
     {% if session.get('admin') %}

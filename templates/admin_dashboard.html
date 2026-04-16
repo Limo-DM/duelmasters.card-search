@@ -2,7 +2,29 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>管理者ダッシュボード</title>
+    <style>
+    body{font-family:Arial,sans-serif;padding:20px;background:#fafafa;}
+    h1,h2,h3{color:#222;}
+    table{border-collapse:collapse;width:100%;margin-bottom:20px;}
+    th,td{border:1px solid #ddd;padding:6px 10px;font-size:.9em;}
+    th{background:#f0f0f0;}
+    .btn{padding:5px 12px;border:none;border-radius:6px;cursor:pointer;font-size:.85em;}
+    .btn-blue{background:#2b6cff;color:#fff;}
+    .btn-red{background:#d44;color:#fff;}
+    .btn-gray{background:#aaa;color:#fff;}
+    a.btn{text-decoration:none;display:inline-block;}
+    /* Card Group UI */
+    #group-builder{background:#fff;border:1.5px solid #ccc;border-radius:10px;padding:20px;margin-top:10px;max-width:600px;}
+    .group-entry{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+    .group-entry input{padding:6px 10px;border:1px solid #bbb;border-radius:6px;font-size:.9em;width:200px;}
+    .group-preview{font-size:.8em;color:#555;margin-top:4px;}
+    #existing-groups{margin-top:16px;}
+    .group-row{background:#fff;border:1px solid #ddd;border-radius:8px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+    .group-members-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+    .group-member-thumb{width:44px;height:60px;object-fit:cover;border-radius:4px;border:1px solid #eee;}
+    </style>
 </head>
 <body>
     <h1>管理者ダッシュボード</h1>
@@ -10,15 +32,13 @@
     <!-- 🔍 検索バー -->
     <form method="get" action="/admin" style="margin-bottom: 20px;">
      <input type="text" name="query" placeholder="カード名・種族・文明で検索" value="{{ search_query }}" style="width: 300px;">
-     <button type="submit">検索</button>
+     <button type="submit" class="btn btn-blue">検索</button>
     </form>
 
-    <br>
-    <a href="{{ url_for('upload_file') }}">＋ 新規カードを登録</a>
-
+    <a href="{{ url_for('upload_file') }}" class="btn btn-blue">＋ 新規カードを登録</a>
 
     <h2>カード一覧</h2>
-    <table border="1" cellpadding="5">
+    <table>
         <tr>
             <th>ID</th>
             <th>名前（日本語）</th>
@@ -30,13 +50,11 @@
             <td>{{ card.id }}</td>
             <td>{{ card.name_ja }}</td>
             <td>{{ card.name_en }}</td>
-            <td>
-                <a href="{{ url_for('edit_card', id=card.id) }}">編集</a>
-
-                <form action="{{ url_for('admin_delete', id=card.id) }}" method="post" onsubmit="return confirm('本当に削除しますか？');">
-                   <button type="submit">削除</button>
+            <td style="display:flex;gap:6px;flex-wrap:wrap;">
+                <a href="{{ url_for('edit_card', id=card.id) }}" class="btn btn-blue">編集</a>
+                <form action="{{ url_for('admin_delete', id=card.id) }}" method="post" onsubmit="return confirm('本当に削除しますか？');" style="margin:0;">
+                   <button type="submit" class="btn btn-red">削除</button>
                 </form>
-
             </td>
         </tr>
         {% endfor %}
@@ -44,17 +62,144 @@
 
     {% with messages = get_flashed_messages() %}
       {% if messages %}
-        <ul>
-        {% for message in messages %}
-          <li>{{ message }}</li>
-        {% endfor %}
-        </ul>
+        <ul>{% for message in messages %}<li>{{ message }}</li>{% endfor %}</ul>
       {% endif %}
     {% endwith %}
-  <a href="{{ url_for('search') }}">
-    <button>カード一覧ページを開く</button>
-  </a>
 
+    <!-- ===== Card Integration (グループ統合) ===== -->
+    <h2>カード統合（グループ）</h2>
+    <p style="font-size:.88em;color:#555;">複数のカードを1枚として扱うグループを作成します。グループカードをデッキに追加すると全メンバーが1枚ずつ追加され、枚数は1枚としてカウントされます。</p>
+
+    <button class="btn btn-blue" id="btn-show-group-builder">＋ 新しいグループを作成</button>
+
+    <div id="group-builder" style="display:none;">
+        <h3>グループを作成</h3>
+        <div id="group-entries"></div>
+        <button class="btn btn-gray" id="btn-add-entry" style="margin-top:4px;">＋ カードを追加</button>
+        <br><br>
+        <button class="btn btn-blue" id="btn-group-done">✓ 完了</button>
+        <button class="btn btn-gray" id="btn-group-cancel" style="margin-left:8px;">キャンセル</button>
+        <div id="group-msg" style="margin-top:8px;font-size:.85em;"></div>
+    </div>
+
+    <div id="existing-groups">
+        <h3>既存のグループ</h3>
+        <div id="groups-list"><p style="color:#aaa;">読み込み中...</p></div>
+    </div>
+
+    <br>
+    <a href="{{ url_for('search') }}"><button class="btn btn-gray">カード一覧ページを開く</button></a>
+
+    <script>
+    // ===== Card Group Builder =====
+    (function(){
+        let entryCount = 0;
+
+        function addEntry(){
+            entryCount++;
+            const num = entryCount;
+            const row = document.createElement('div');
+            row.className = 'group-entry';
+            row.id = 'entry-' + num;
+            row.innerHTML =
+                '<span style="min-width:20px;font-weight:700;">' + num + '.</span>' +
+                '<input type="number" placeholder="カードID" class="group-card-id-input" min="1">' +
+                '<button class="btn btn-gray btn-preview-card" data-num="' + num + '">確認</button>' +
+                '<button class="btn btn-red btn-remove-entry" data-num="' + num + '">✕</button>' +
+                '<span class="group-preview" id="preview-' + num + '"></span>';
+            document.getElementById('group-entries').appendChild(row);
+            row.querySelector('.btn-preview-card').addEventListener('click', function(){
+                const id = row.querySelector('.group-card-id-input').value.trim();
+                if(!id) return;
+                fetch('/api/cards?id=' + id)
+                .then(r=>r.json()).then(data=>{
+                    const card = (data.cards||[])[0];
+                    const span = document.getElementById('preview-' + num);
+                    span.textContent = card ? '✓ ' + (card.name_en||card.name_ja||'ID:'+id) : '✗ 見つかりません';
+                    span.style.color = card ? '#2a9d2a' : '#d44';
+                }).catch(()=>{});
+            });
+            row.querySelector('.btn-remove-entry').addEventListener('click', function(){
+                row.remove();
+            });
+        }
+
+        document.getElementById('btn-show-group-builder').addEventListener('click',function(){
+            document.getElementById('group-builder').style.display='block';
+            document.getElementById('group-entries').innerHTML='';
+            entryCount = 0;
+            addEntry();
+        });
+        document.getElementById('btn-add-entry').addEventListener('click', addEntry);
+        document.getElementById('btn-group-cancel').addEventListener('click',function(){
+            document.getElementById('group-builder').style.display='none';
+        });
+        document.getElementById('btn-group-done').addEventListener('click',function(){
+            const inputs = document.querySelectorAll('.group-card-id-input');
+            const ids = [];
+            inputs.forEach(function(inp){
+                const v = inp.value.trim();
+                if(v && !isNaN(v)) ids.push(parseInt(v));
+            });
+            if(ids.length < 2){
+                document.getElementById('group-msg').style.color='#d44';
+                document.getElementById('group-msg').textContent='2枚以上のカードIDを入力してください。';
+                return;
+            }
+            fetch('/api/card_groups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({card_ids:ids})})
+            .then(r=>r.json()).then(data=>{
+                if(data.ok){
+                    document.getElementById('group-msg').style.color='#2a9d2a';
+                    document.getElementById('group-msg').textContent='グループを作成しました！';
+                    setTimeout(()=>{
+                        document.getElementById('group-builder').style.display='none';
+                        loadGroups();
+                    }, 800);
+                } else {
+                    document.getElementById('group-msg').style.color='#d44';
+                    document.getElementById('group-msg').textContent=data.error||'エラーが発生しました。';
+                }
+            }).catch(()=>{ document.getElementById('group-msg').textContent='通信エラー'; });
+        });
+
+        function loadGroups(){
+            fetch('/api/card_groups').then(r=>r.json()).then(data=>{
+                const container = document.getElementById('groups-list');
+                if(!data.groups||data.groups.length===0){
+                    container.innerHTML='<p style="color:#aaa;">グループはまだありません。</p>';
+                    return;
+                }
+                container.innerHTML='';
+                data.groups.forEach(function(g){
+                    const row = document.createElement('div');
+                    row.className='group-row';
+                    let membersHtml='<div class="group-members-list">';
+                    (g.members||[]).forEach(function(m){
+                        membersHtml += m.image_url
+                            ? '<img class="group-member-thumb" src="'+m.image_url+'" title="'+escHtml(m.name)+'">'
+                            : '<span style="font-size:.75em;color:#888;">ID:'+m.card_id+'</span>';
+                    });
+                    membersHtml += '</div>';
+                    const memberNames = (g.members||[]).map(m=>m.name||'ID:'+m.card_id).join(' / ');
+                    row.innerHTML =
+                        '<div><strong>Group #' + g.id + '</strong>' +
+                        (g.name ? ' — ' + escHtml(g.name) : '') +
+                        '<div style="font-size:.8em;color:#888;margin-top:2px;">' + escHtml(memberNames) + '</div>' +
+                        membersHtml + '</div>' +
+                        '<button class="btn btn-red btn-delete-group" data-id="'+g.id+'">削除</button>';
+                    container.appendChild(row);
+                    row.querySelector('.btn-delete-group').addEventListener('click',function(){
+                        if(!confirm('グループ #'+g.id+' を削除しますか？')) return;
+                        fetch('/api/card_groups/'+g.id,{method:'DELETE'})
+                        .then(r=>r.json()).then(data=>{ if(data.ok) loadGroups(); });
+                    });
+                });
+            }).catch(()=>{ document.getElementById('groups-list').innerHTML='<p style="color:#d44;">読み込みエラー</p>'; });
+        }
+        function escHtml(s){ const d=document.createElement('div');d.textContent=s||'';return d.innerHTML; }
+        loadGroups();
+    })();
+    </script>
 
 </body>
 </html>
