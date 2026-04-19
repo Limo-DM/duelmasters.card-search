@@ -237,9 +237,11 @@
     <div style="max-width:660px;margin:16px auto 0;padding:12px 16px;background:#f0f5ff;border:1.5px solid #a0bfff;border-radius:10px;font-size:.85em;color:#1a3a7a;line-height:1.8;text-align:left;">
         🔗 This card is treated together with the following cards as one integrated card:
         <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px 12px;">
+            {% set from_deck = request.args.get('from_deck') %}
             {% for m in card_group_info.members %}
             {% if m.card_id != card.id %}
-            <a href="{{ url_for('card_detail', id=m.card_id) }}" style="color:#2b6cff;font-weight:600;text-decoration:none;border-bottom:1px solid #2b6cff;">{{ m.name }}</a>
+            <a href="{{ url_for('card_detail', id=m.card_id) }}{% if from_deck %}?from_deck={{ from_deck }}{% endif %}"
+               style="color:#2b6cff;font-weight:600;text-decoration:none;border-bottom:1px solid #2b6cff;">{{ m.name }}</a>
             {% endif %}
             {% endfor %}
         </div>
