@@ -50,11 +50,17 @@ h1{margin:0 0 6px;font-size:1.6em;}
 .print-actions{display:flex;gap:10px;margin-top:16px;}
 
 /* ===== Lightbox ===== */
-.lightbox-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:3000;align-items:center;justify-content:center;gap:20px;cursor:pointer;flex-wrap:wrap;}
+.lightbox-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:3000;align-items:center;justify-content:center;gap:12px;cursor:pointer;}
 .lightbox-overlay.open{display:flex;}
-.lightbox-overlay img{max-width:38vw;max-height:88vh;border-radius:8px;object-fit:contain;pointer-events:none;}
+.lightbox-overlay img{max-width:36vw;max-height:88vh;border-radius:8px;object-fit:contain;pointer-events:none;}
+.lightbox-nav-btn{background:rgba(255,255,255,.18);border:none;color:#fff;font-size:2rem;width:48px;height:80px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;pointer-events:auto;transition:background .15s;}
+.lightbox-nav-btn:hover{background:rgba(255,255,255,.35);}
+.lightbox-nav-btn.hidden{visibility:hidden;}
+.lightbox-card-images{display:flex;gap:12px;align-items:center;pointer-events:none;}
+.lightbox-counter{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);color:#fff;font-size:.9rem;background:rgba(0,0,0,.45);padding:3px 12px;border-radius:12px;pointer-events:none;}
 @media(max-width:700px){
-    .lightbox-overlay img{max-width:80vw;max-height:44vh;}
+    .lightbox-overlay img{max-width:70vw;max-height:40vh;}
+    .lightbox-card-images{flex-direction:column;gap:6px;}
 }
 
 @media(max-width:700px){
@@ -67,7 +73,12 @@ h1{margin:0 0 6px;font-size:1.6em;}
 <body>
 
 <!-- Lightbox overlay -->
-<div class="lightbox-overlay" id="lightbox-overlay"></div>
+<div class="lightbox-overlay" id="lightbox-overlay">
+    <button class="lightbox-nav-btn hidden" id="lightbox-prev">&#8592;</button>
+    <div class="lightbox-card-images" id="lightbox-images"></div>
+    <button class="lightbox-nav-btn hidden" id="lightbox-next">&#8594;</button>
+    <div class="lightbox-counter" id="lightbox-counter" style="display:none;"></div>
+</div>
 
 <div class="container">
     <h1>{{ deck.name }}</h1>
@@ -305,44 +316,74 @@ document.getElementById('btn-delete').addEventListener('click', async function()
 <!-- Lightbox JS -->
 <script>
 (function(){
-    const overlay = document.getElementById('lightbox-overlay');
+    const overlay  = document.getElementById('lightbox-overlay');
     if(!overlay) return;
+    const imgBox   = document.getElementById('lightbox-images');
+    const prevBtn  = document.getElementById('lightbox-prev');
+    const nextBtn  = document.getElementById('lightbox-next');
+    const counter  = document.getElementById('lightbox-counter');
+
+    let _members = [];   // [{image_url, image_url2, name}, ...]
+    let _idx     = 0;
+
+    function showMember(idx){
+        _idx = idx;
+        imgBox.innerHTML = '';
+        const m = _members[idx];
+        const i1 = document.createElement('img');
+        i1.src = m.image_url;
+        i1.alt = m.name || '';
+        imgBox.appendChild(i1);
+        if(m.image_url2){
+            const i2 = document.createElement('img');
+            i2.src = m.image_url2;
+            i2.alt = m.name || '';
+            imgBox.appendChild(i2);
+        }
+        // nav buttons
+        prevBtn.classList.toggle('hidden', idx === 0);
+        nextBtn.classList.toggle('hidden', idx === _members.length - 1);
+        // counter
+        if(_members.length > 1){
+            counter.textContent = (idx+1) + ' / ' + _members.length;
+            counter.style.display = '';
+        } else {
+            counter.style.display = 'none';
+        }
+    }
 
     function openLightbox(img1, img2){
-        overlay.innerHTML = '';
-        const i1 = document.createElement('img');
-        i1.src = img1;
-        overlay.appendChild(i1);
-        if(img2){
-            const i2 = document.createElement('img');
-            i2.src = img2;
-            overlay.appendChild(i2);
-        }
+        _members = [{image_url: img1, image_url2: img2||null, name:''}];
+        _idx = 0;
+        showMember(0);
         overlay.classList.add('open');
     }
 
-    // Open lightbox showing all cards in a group
-    function openLightboxGroup(members){
-        overlay.innerHTML = '';
-        members.forEach(function(m){
-            const i1 = document.createElement('img');
-            i1.src = m.image_url;
-            i1.alt = m.name || '';
-            overlay.appendChild(i1);
-            if(m.image_url2){
-                const i2 = document.createElement('img');
-                i2.src = m.image_url2;
-                i2.alt = m.name || '';
-                overlay.appendChild(i2);
-            }
-        });
+    // Open group lightbox: navigate one member at a time, each shows image1+image2
+    function openLightboxGroup(members, startIdx){
+        _members = members.filter(m => m.image_url);
+        if(!_members.length) return;
+        _idx = startIdx || 0;
+        showMember(_idx);
         overlay.classList.add('open');
     }
 
     function closeLightbox(){
         overlay.classList.remove('open');
-        overlay.innerHTML = '';
+        imgBox.innerHTML = '';
+        counter.style.display = 'none';
+        prevBtn.classList.add('hidden');
+        nextBtn.classList.add('hidden');
     }
+
+    prevBtn.addEventListener('click', function(e){
+        e.stopPropagation();
+        if(_idx > 0) showMember(_idx - 1);
+    });
+    nextBtn.addEventListener('click', function(e){
+        e.stopPropagation();
+        if(_idx < _members.length - 1) showMember(_idx + 1);
+    });
 
     document.querySelectorAll('.lightbox-trigger').forEach(img=>{
         img.addEventListener('click', function(e){
@@ -351,7 +392,7 @@ document.getElementById('btn-delete').addEventListener('click', async function()
             if(groupData){
                 try {
                     const members = JSON.parse(groupData);
-                    openLightboxGroup(members);
+                    openLightboxGroup(members, 0);
                 } catch(ex) {
                     openLightbox(this.src, null);
                 }
@@ -363,9 +404,14 @@ document.getElementById('btn-delete').addEventListener('click', async function()
         });
     });
 
-    overlay.addEventListener('click', closeLightbox);
+    overlay.addEventListener('click', function(e){
+        if(e.target === overlay || e.target === imgBox) closeLightbox();
+    });
     document.addEventListener('keydown', function(e){
+        if(!overlay.classList.contains('open')) return;
         if(e.key === 'Escape') closeLightbox();
+        if(e.key === 'ArrowLeft' && _idx > 0) showMember(_idx - 1);
+        if(e.key === 'ArrowRight' && _idx < _members.length - 1) showMember(_idx + 1);
     });
 })();
 </script>

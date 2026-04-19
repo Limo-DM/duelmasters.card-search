@@ -226,6 +226,26 @@
     </div>
     {% endif %}
 
+    {% set ct_lower = (card.card_type or '') | lower %}
+    {% if 'gacharange' in ct_lower %}
+    <div style="max-width:660px;margin:18px auto 0;padding:10px 16px;background:#fff8e1;border:1.5px solid #f5c518;border-radius:10px;font-size:.83em;color:#7a5c00;line-height:1.6;text-align:left;">
+        ℹ️ Due to the size of the cards, the card type "Gacharange" is represented as "GR" in the image, matching the Japanese notation.
+    </div>
+    {% endif %}
+
+    {% if card_group_info %}
+    <div style="max-width:660px;margin:16px auto 0;padding:12px 16px;background:#f0f5ff;border:1.5px solid #a0bfff;border-radius:10px;font-size:.85em;color:#1a3a7a;line-height:1.8;text-align:left;">
+        🔗 このカードは以下のカードたちと合わせて一つのカードとして扱います：
+        <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px 12px;">
+            {% for m in card_group_info.members %}
+            {% if m.card_id != card.id %}
+            <a href="{{ url_for('card_detail', id=m.card_id) }}" style="color:#2b6cff;font-weight:600;text-decoration:none;border-bottom:1px solid #2b6cff;">{{ m.name }}</a>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <div style="margin-top: 20px; text-align:center;">
         <a href="{{ url_for('index') }}" id="back-to-search">← Return to list</a>
     </div>

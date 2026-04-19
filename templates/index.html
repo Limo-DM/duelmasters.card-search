@@ -809,7 +809,7 @@
                                 <label class="ct-item"><input type="checkbox" class="ct-checkbox" value="Creature_all"> Creature (all)</label>
                                 <label class="ct-item"><input type="checkbox" class="ct-checkbox" value="Creature_only"> Creature (only)</label>
 
-                                {% for t in ['Evolution Creature','Spell','Tamaseed','Field','GR','Dragheart','Psychic','Castle','Cross Gear','Aura','Duelist'] %}
+                                {% for t in ['Evolution Creature','Spell','Tamaseed','Field','Gacharange','Duelmate','Dragheart','Psychic','Castle','Cross Gear','Aura','Duelist'] %}
                                     <label class="ct-item"><input type="checkbox" class="ct-checkbox" value="{{ t }}"> {{ t }}</label>
                                 {% endfor %}
 
@@ -817,10 +817,9 @@
                                     <label class="ct-item ct-other">
                                         <input type="checkbox" class="ct-checkbox" value="other"> other
                                     </label>
-                                    <button type="button" class="ct-mini-btn" id="ct-custom-toggle">show custom ▸</button>
                                 </div>
 
-                                <div class="ct-custom" id="ct-custom" hidden>
+                                <div class="ct-custom" id="ct-custom">
                                     <div class="ct-section-title">Custom types (registered)</div>
                                     <div class="ct-custom-grid">
                                         {% for dt in detail_types %}
@@ -996,7 +995,6 @@
         const ctdInput   = document.getElementById('card-type-detail-input');
         const btnClose   = document.getElementById('ct-close');
         const btnClear   = document.getElementById('ct-clear');
-        const btnCustom  = document.getElementById('ct-custom-toggle');
         const boxCustom  = document.getElementById('ct-custom');
 
         const selected       = new Set((ctInput.value  || '').split(',').filter(Boolean));
@@ -1043,13 +1041,6 @@
         document.addEventListener('click', (e) => {
             if (!dd.contains(e.target)) closePanel();
         });
-
-        if (btnCustom && boxCustom) {
-            btnCustom.addEventListener('click', () => {
-                boxCustom.hidden = !boxCustom.hidden;
-                btnCustom.textContent = boxCustom.hidden ? 'show custom ▸' : 'hide custom ▾';
-            });
-        }
 
         btnClear.addEventListener('click', () => {
             selected.clear(); selectedDetail.clear();

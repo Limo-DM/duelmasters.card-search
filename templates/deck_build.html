@@ -143,11 +143,12 @@ input[type=number].small-input{width:90px;}
 .save-btns button{flex:1;padding:10px;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:.95em;}
 
 /* Pagination */
-.pagination{display:flex;justify-content:center;gap:6px;margin:16px 0;flex-wrap:wrap;}
-.pagination a,.pagination span{padding:6px 11px;border-radius:6px;font-size:.85em;text-decoration:none;}
-.pagination a{border:1px solid #bbb;color:#333;}
-.pagination a:hover{background:#eee;}
-.pagination .current{background:#2b6cff;color:#fff;border:1px solid #2b6cff;}
+.pagination{display:flex;justify-content:center;align-items:center;gap:8px;margin:16px 0;flex-wrap:wrap;}
+.page-btn,.page-num{padding:8px 12px;border:1px solid #bbb;border-radius:8px;text-decoration:none;color:#222;background:#f7f7f7;cursor:pointer;font-size:.85em;}
+.page-btn:hover,.page-num:hover{background:#eee;}
+.page-num.current{background:#111;color:#fff;border-color:#111;font-weight:700;}
+.page-btn.disabled{opacity:.4;pointer-events:none;}
+.page-ellipsis{padding:0 6px;color:#666;}
 
 .cover-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:12px;max-height:200px;overflow-y:auto;}
 .cover-grid img{width:100%;border:2px solid transparent;border-radius:4px;cursor:pointer;}
@@ -281,14 +282,13 @@ input[type=number].small-input{width:90px;}
                             <div class="ct-section-title">Preset</div>
                             <label class="ct-item"><input type="checkbox" class="ct-checkbox" value="Creature_all"> Creature (all)</label>
                             <label class="ct-item"><input type="checkbox" class="ct-checkbox" value="Creature_only"> Creature (only)</label>
-                            {% for t in ['Evolution Creature','Spell','Tamaseed','Field','GR','Dragheart','Psychic','Castle','Cross Gear','Aura','Duelist'] %}
+                            {% for t in ['Evolution Creature','Spell','Tamaseed','Field','Gacharange','Duelmate','Dragheart','Psychic','Castle','Cross Gear','Aura','Duelist'] %}
                             <label class="ct-item"><input type="checkbox" class="ct-checkbox" value="{{ t }}"> {{ t }}</label>
                             {% endfor %}
                             <div class="ct-other-row">
                                 <label class="ct-item ct-other"><input type="checkbox" class="ct-checkbox" value="other"> other</label>
-                                <button type="button" class="ct-mini-btn" id="ct-custom-toggle">show custom ▸</button>
                             </div>
-                            <div class="ct-custom" id="ct-custom" hidden>
+                            <div class="ct-custom" id="ct-custom">
                                 <div class="ct-section-title">Custom types</div>
                                 <div class="ct-custom-grid">
                                     {% for dt in detail_types %}
@@ -704,7 +704,8 @@ input[type=number].small-input{width:90px;}
             const img=document.createElement('img');
             img.src=card.image_url||''; img.alt=card.name_en||card.name_ja||''; img.title=img.alt;
             img.addEventListener('click',()=>{
-                if(!isGroup){ saveSearchState(); window.location.href='/card/'+card.id+'?from_deck='+FORMAT; }
+                saveSearchState();
+                window.location.href='/card/'+card.id+'?from_deck='+FORMAT;
             });
             if(isBanned) img.style.opacity='0.35';
             cell.appendChild(img);
@@ -725,7 +726,8 @@ input[type=number].small-input{width:90px;}
                 const minus=document.createElement('button'); minus.className='qty-btn'; minus.textContent='−';
                 minus.addEventListener('click',()=>{ if(isGroup&&gkey){ removeCard(gkey); } else { removeCard(card.id); } });
                 const qtySpan=document.createElement('span'); qtySpan.className='qty-val';
-                qtySpan.id=isGroup?'qty-'+gkey:'qty-'+card.id;
+                if(isGroup){ qtySpan.dataset.gkey=gkey; }
+                else { qtySpan.id='qty-'+card.id; }
                 qtySpan.textContent=isGroup?(deck.cards[gkey]?deck.cards[gkey].qty:0):(deck.cards[card.id]?deck.cards[card.id].qty:0);
                 const plus=document.createElement('button'); plus.className='qty-btn'; plus.textContent='+';
                 plus.addEventListener('click',()=>addCard(card));
@@ -740,27 +742,62 @@ input[type=number].small-input{width:90px;}
     }
 
     function renderGrid(){
+        // Update regular card qty displays
         for(const id in loadedCards){
             const card=loadedCards[id];
-            if(card.group_id){
-                const gkey='G'+card.group_id;
-                const el=document.getElementById('qty-'+gkey);
-                if(el) el.textContent=deck.cards[gkey]?deck.cards[gkey].qty:0;
-            } else {
+            if(!card.group_id){
                 const el=document.getElementById('qty-'+id);
                 if(el) el.textContent=deck.cards[id]?deck.cards[id].qty:0;
             }
         }
+        // Update group card qty displays (use data-gkey attribute to handle multiple cards per group)
+        document.querySelectorAll('.qty-val[data-gkey]').forEach(el=>{
+            const gkey=el.dataset.gkey;
+            el.textContent=deck.cards[gkey]?deck.cards[gkey].qty:0;
+        });
     }
 
     // ===== PAGINATION =====
     function renderPagination(page,pages){
         const div=document.getElementById('pagination'); div.innerHTML='';
         if(pages<=1) return;
-        for(let p=1;p<=pages;p++){
-            if(p===page){ const s=document.createElement('span');s.className='current';s.textContent=p;div.appendChild(s); }
-            else { const a=document.createElement('a');a.href='#';a.textContent=p;a.addEventListener('click',(e)=>{e.preventDefault();fetchCards(p);window.scrollTo(0,0);});div.appendChild(a); }
+
+        function mkBtn(label, p, cls){
+            const el=document.createElement('a');
+            el.href='#'; el.className=cls||'page-num';
+            el.textContent=label;
+            el.addEventListener('click',e=>{ e.preventDefault(); fetchCards(p); window.scrollTo(0,0); });
+            return el;
         }
+        function mkCurrent(p){
+            const s=document.createElement('span'); s.className='page-num current'; s.textContent=p; return s;
+        }
+        function mkEllipsis(){
+            const s=document.createElement('span'); s.className='page-ellipsis'; s.textContent='…'; return s;
+        }
+
+        // ← prev
+        const prev=document.createElement('a'); prev.href='#'; prev.className='page-btn'+(page===1?' disabled':''); prev.textContent='←';
+        if(page>1) prev.addEventListener('click',e=>{ e.preventDefault(); fetchCards(page-1); window.scrollTo(0,0); });
+        div.appendChild(prev);
+
+        // Page numbers with ellipsis
+        const delta=2;
+        const pages_list=[];
+        for(let p=1;p<=pages;p++){
+            if(p===1||p===pages||Math.abs(p-page)<=delta) pages_list.push(p);
+            else if(pages_list[pages_list.length-1]!==null) pages_list.push(null);
+        }
+        pages_list.forEach(p=>{
+            if(p===null){ div.appendChild(mkEllipsis()); }
+            else if(p===page){ div.appendChild(mkCurrent(p)); }
+            else { div.appendChild(mkBtn(p,p)); }
+        });
+
+        // → next
+        const next=document.createElement('a'); next.href='#'; next.className='page-btn'+(page===pages?' disabled':''); next.textContent='→';
+        if(page<pages) next.addEventListener('click',e=>{ e.preventDefault(); fetchCards(page+1); window.scrollTo(0,0); });
+        div.appendChild(next);
     }
 
     // ===== RIGHT PANEL =====
@@ -811,9 +848,10 @@ input[type=number].small-input{width:90px;}
         const row=document.createElement('div');row.className='dp-card-row';
         const link=document.createElement('a');link.className='dp-card-name';link.href='#';
         if(c.is_group){
+            const firstId = c.group_members&&c.group_members[0] ? c.group_members[0].card_id : null;
             link.textContent='[G] '+(c.name_en||'Group #'+c.group_id);
             link.title='Group: '+((c.group_members||[]).map(m=>m.name||'ID:'+m.card_id).join(', '));
-            link.addEventListener('click',(e)=>{ e.preventDefault(); });
+            link.addEventListener('click',(e)=>{ e.preventDefault(); if(firstId){ saveSearchState(); window.location.href='/card/'+firstId+'?from_deck='+FORMAT; } });
         } else {
             link.textContent=c.name_en||'Card #'+id;
             link.addEventListener('click',(e)=>{ e.preventDefault(); saveSearchState(); window.location.href='/card/'+id+'?from_deck='+FORMAT; });

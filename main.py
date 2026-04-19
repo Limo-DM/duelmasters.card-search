@@ -708,9 +708,37 @@ def card_detail(id):
         card = resp.data
         if not card:
             abort(404)
+        card["image_url"] = normalize_image_url_for_env(card.get("image_url"))
+        card["image_url2"] = normalize_image_url_for_env(card.get("image_url2"))
         note_html = markdown.markdown(card.get('note') or '')
         card["regulation_label"] = get_regulation_label(card.get("regulation_type"))
-        return render_template('card_detail.html', card=card, note_html=note_html)
+
+        # Check if this card belongs to a group
+        card_group_info = None
+        try:
+            gm_res = supabase.table("card_group_members").select("group_id, position").eq("card_id", id).execute()
+            gm_rows = gm_res.data or []
+            if gm_rows:
+                group_id = gm_rows[0]["group_id"]
+                all_m_res = supabase.table("card_group_members").select("card_id, position").eq("group_id", group_id).order("position").execute()
+                all_members_raw = all_m_res.data or []
+                member_card_ids = [m["card_id"] for m in all_members_raw]
+                mc_res = supabase.table("Cards").select("id, name_en, name_ja").in_("id", member_card_ids).execute()
+                mc_map = {c["id"]: c for c in (mc_res.data or [])}
+                group_members = []
+                for m in all_members_raw:
+                    ci = mc_map.get(m["card_id"], {})
+                    group_members.append({
+                        "card_id": m["card_id"],
+                        "position": m["position"],
+                        "name": ci.get("name_en") or ci.get("name_ja") or str(m["card_id"]),
+                    })
+                card_group_info = {"group_id": group_id, "members": group_members}
+        except Exception:
+            pass
+
+        return render_template('card_detail.html', card=card, note_html=note_html,
+                               card_group_info=card_group_info)
     except Exception as e:
         return f"カード取得エラー: {e}", 500
 
