@@ -803,7 +803,7 @@
                                 <span class="ct-caret">▾</span>
                             </button>
 
-                            <div class="ct-panel" id="ct-panel">
+                            <div class="ct-panel" id="ct-panel" hidden>
                                 <div class="ct-section-title">Preset</div>
 
                                 <label class="ct-item"><input type="checkbox" class="ct-checkbox" value="Creature_all"> Creature (all)</label>
@@ -1035,9 +1035,12 @@
             });
         });
 
-        // Panel is always open by default; trigger toggles it manually
         trigger.addEventListener('click', () => panel.hidden ? openPanel() : closePanel());
         btnClose.addEventListener('click', closePanel);
+
+        document.addEventListener('click', (e) => {
+            if (!dd.contains(e.target)) closePanel();
+        });
 
         btnClear.addEventListener('click', () => {
             selected.clear(); selectedDetail.clear();

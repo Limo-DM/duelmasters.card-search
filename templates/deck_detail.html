@@ -142,7 +142,7 @@ h1{margin:0 0 6px;font-size:1.6em;}
                             <img src="{{ rep.image_url }}"
                                  alt="{{ rep.name }} (Group)"
                                  title="{{ rep.name }} (Group — click to view all)"
-                                 data-group-members="{{ ginfo.members | tojson | e }}"
+                                 data-group-members='{{ ginfo.members | tojson }}'
                                  class="lightbox-trigger group-card-img" style="cursor:zoom-in;position:relative;">
                             {% endfor %}
                         {% endif %}
@@ -174,7 +174,7 @@ h1{margin:0 0 6px;font-size:1.6em;}
                         {% set rep = ginfo.members[0] if ginfo.members else None %}
                         {% if rep %}{% for i in range(dc.quantity) %}
                         <img src="{{ rep.image_url }}" alt="{{ rep.name }} (Group)" title="{{ rep.name }} (Group)"
-                             data-group-members="{{ ginfo.members | tojson | e }}"
+                             data-group-members='{{ ginfo.members | tojson }}'
                              class="lightbox-trigger group-card-img" style="cursor:zoom-in;">
                         {% endfor %}{% endif %}
                     {% else %}
@@ -198,7 +198,7 @@ h1{margin:0 0 6px;font-size:1.6em;}
                         {% set rep = ginfo.members[0] if ginfo.members else None %}
                         {% if rep %}{% for i in range(dc.quantity) %}
                         <img src="{{ rep.image_url }}" alt="{{ rep.name }} (Group)" title="{{ rep.name }} (Group)"
-                             data-group-members="{{ ginfo.members | tojson | e }}"
+                             data-group-members='{{ ginfo.members | tojson }}'
                              class="lightbox-trigger group-card-img" style="cursor:zoom-in;">
                         {% endfor %}{% endif %}
                     {% else %}

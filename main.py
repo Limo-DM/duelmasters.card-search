@@ -315,6 +315,24 @@ def index():
         pages = (total + per_page - 1) // per_page
         page_items = build_page_items(page, pages, window=2)
 
+        # Compute custom card types (non-preset) for the Card Type dropdown
+        _PRESET_TYPES_IDX = [
+            "Creature", "Evolution Creature", "Spell", "Tamaseed", "Field",
+            "GR", "Dragheart", "Psychic", "Castle", "Cross Gear", "Aura", "Duelist",
+        ]
+        _space_idx = re.compile(r"\s+")
+        def _norm_ct_idx(s):
+            s = unicodedata.normalize("NFKC", (s or "")).strip().lower()
+            return _space_idx.sub(" ", s)
+        _preset_norms_idx = {_norm_ct_idx(p) for p in _PRESET_TYPES_IDX}
+        _dt_set_idx = set()
+        for c in all_cards:
+            for key in ("card_type", "twin_card_type"):
+                v = _norm_ct_idx(c.get(key))
+                if v and v not in _preset_norms_idx:
+                    _dt_set_idx.add(v)
+        detail_types = sorted(_dt_set_idx, key=lambda x: x.lower())
+
         return render_template(
             'index.html',
             cards=paginated_cards,
@@ -325,7 +343,9 @@ def index():
             next_num=next_num,
             pages=pages,
             page_items=page_items,
-            search_query=""
+            search_query="",
+            detail_types=detail_types,
+            selected_detail_types=[],
         )
 
     except Exception as e:
