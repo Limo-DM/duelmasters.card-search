@@ -235,7 +235,7 @@
 
     {% if card_group_info %}
     <div style="max-width:660px;margin:16px auto 0;padding:12px 16px;background:#f0f5ff;border:1.5px solid #a0bfff;border-radius:10px;font-size:.85em;color:#1a3a7a;line-height:1.8;text-align:left;">
-        🔗 このカードは以下のカードたちと合わせて一つのカードとして扱います：
+        🔗 This card is treated together with the following cards as one integrated card:
         <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px 12px;">
             {% for m in card_group_info.members %}
             {% if m.card_id != card.id %}
@@ -336,6 +336,11 @@
         civilization: {{ (card.civilization or '')|tojson }},
     };
 
+    // Group card support: use G<group_id> as deck key to sync with deck builder
+    const GROUP_ID = {{ card_group_info.group_id if card_group_info else 'null' }};
+    const GROUP_MEMBERS = {{ (card_group_info.members | tojson) if card_group_info else '[]' }};
+    const DECK_KEY = GROUP_ID !== null ? 'G' + GROUP_ID : String(CARD.id);
+
     let deck=loadDeck();
     function loadDeck(){ try{ const s=sessionStorage.getItem(STORAGE_KEY); if(s) return JSON.parse(s); }catch(e){} return {cards:{},special:null,deckId:null}; }
     function saveDeck(){ sessionStorage.setItem(STORAGE_KEY,JSON.stringify(deck)); }
@@ -389,23 +394,27 @@
         const zone=getCardZone(CARD);
         if(zone==='banned'||zone==='special') return false;
         if(CARD.id===DOKINDAM_ID&&deck.special) return false;
-        const cur=deck.cards[CARD.id]?deck.cards[CARD.id].qty:0;
-        const max=maxCopies(CARD,zone);
+        const cur=deck.cards[DECK_KEY]?deck.cards[DECK_KEY].qty:0;
+        // Group cards use zone limit (no per-card copy limit)
+        const max=GROUP_ID!==null ? zoneLimit(zone) : maxCopies(CARD,zone);
         if(cur>=max||zoneCount(zone)+1>zoneLimit(zone)) return false;
         return true;
     }
 
     function addCard(){
         if(!canAdd()) return;
-        const zone=getCardZone(CARD), id=CARD.id;
-        if(deck.cards[id]){ deck.cards[id].qty++; }
-        else { deck.cards[id]={zone,qty:1,name_en:CARD.name_en||CARD.name_ja||'Unknown',image_url:CARD.image_url||'',card_type:CARD.card_type||'',regulation_type:CARD.regulation_type||0,civilization:CARD.civilization||''}; }
+        const zone=getCardZone(CARD);
+        if(deck.cards[DECK_KEY]){ deck.cards[DECK_KEY].qty++; }
+        else if(GROUP_ID!==null){
+            deck.cards[DECK_KEY]={zone,qty:1,name_en:CARD.name_en||CARD.name_ja||'Unknown',image_url:CARD.image_url||'',card_type:CARD.card_type||'',regulation_type:CARD.regulation_type||0,civilization:CARD.civilization||'',is_group:true,group_id:GROUP_ID,group_members:GROUP_MEMBERS};
+        } else {
+            deck.cards[DECK_KEY]={zone,qty:1,name_en:CARD.name_en||CARD.name_ja||'Unknown',image_url:CARD.image_url||'',card_type:CARD.card_type||'',regulation_type:CARD.regulation_type||0,civilization:CARD.civilization||''};
+        }
         saveDeck(); updateControls();
     }
 
     function removeCard(){
-        const id=String(CARD.id);
-        if(deck.cards[id]){ deck.cards[id].qty--; if(deck.cards[id].qty<=0) delete deck.cards[id]; }
+        if(deck.cards[DECK_KEY]){ deck.cards[DECK_KEY].qty--; if(deck.cards[DECK_KEY].qty<=0) delete deck.cards[DECK_KEY]; }
         saveDeck(); updateControls();
     }
 
@@ -424,7 +433,7 @@
         const qtyEl=document.getElementById('db-qty');
         const qtyRow=document.getElementById('db-qty-row');
         ctrl.style.display='block';
-        const cur=deck.cards[CARD.id]?deck.cards[CARD.id].qty:0;
+        const cur=deck.cards[DECK_KEY]?deck.cards[DECK_KEY].qty:0;
         qtyEl.textContent=cur;
         if(zone==='banned'){
             zoneInfo.innerHTML='<div class="db-banned">Not available in '+FROM_DECK+' format</div>';
@@ -502,8 +511,14 @@
     function makePanelRow(id,c){
         const row=document.createElement('div');row.className='dp-card-row';
         const link=document.createElement('a');link.className='dp-card-name';
-        link.href='/card/'+id+'?from_deck='+FROM_DECK;
-        link.textContent=c.name_en||'Card #'+id;
+        if(c.is_group){
+            const firstId=c.group_members&&c.group_members[0]?c.group_members[0].card_id:null;
+            link.href=firstId?'/card/'+firstId+'?from_deck='+FROM_DECK:'#';
+            link.textContent='[G] '+(c.name_en||'Group #'+c.group_id);
+        } else {
+            link.href='/card/'+id+'?from_deck='+FROM_DECK;
+            link.textContent=c.name_en||'Card #'+id;
+        }
 
         const minus=document.createElement('button');minus.className='dp-qty-btn';minus.textContent='−';
         minus.addEventListener('click',()=>{ const sid=String(id);if(deck.cards[sid]){deck.cards[sid].qty--;if(deck.cards[sid].qty<=0)delete deck.cards[sid];}saveDeck();updateControls();renderPanel(); });
@@ -513,7 +528,8 @@
         const plus=document.createElement('button');plus.className='dp-qty-btn';plus.textContent='+';
         plus.addEventListener('click',()=>{
             const sid=String(id),existing=deck.cards[sid];
-            if(existing){ const zone=c.zone,max=(FROM_DECK!=='free'&&parseInt(c.regulation_type)===2)?0:(FROM_DECK!=='free'&&parseInt(c.regulation_type)===1)?1:(zone==='gacharange')?2:4;
+            if(existing){ const zone=c.zone;
+                const max=existing.is_group?zoneLimit(zone):(FROM_DECK!=='free'&&parseInt(c.regulation_type)===2)?0:(FROM_DECK!=='free'&&parseInt(c.regulation_type)===1)?1:(zone==='gacharange')?2:4;
                 if(existing.qty<max&&zoneCount(zone)<zoneLimit(zone)){existing.qty++;saveDeck();updateControls();renderPanel();} }
         });
 
@@ -566,7 +582,15 @@
 
         const DORMAGEDDON_IDS=[403,404,405,406,407],ZERON_IDS=[398,399,400,401,402];
         const cardsArr=[];
-        for(const id in deck.cards){ cardsArr.push({card_id:parseInt(id),zone:deck.cards[id].zone,quantity:deck.cards[id].qty}); }
+        for(const id in deck.cards){
+            const c=deck.cards[id];
+            if(c.is_group){
+                const firstMemberId=c.group_members&&c.group_members[0]?c.group_members[0].card_id:null;
+                if(firstMemberId) cardsArr.push({card_id:firstMemberId,zone:c.zone,quantity:c.qty,group_id:c.group_id});
+            } else {
+                cardsArr.push({card_id:parseInt(id),zone:c.zone,quantity:c.qty});
+            }
+        }
         if(deck.special==='dormageddon_x') DORMAGEDDON_IDS.forEach(cid=>cardsArr.push({card_id:cid,zone:'special',quantity:1}));
         else if(deck.special==='zeron') ZERON_IDS.forEach(cid=>cardsArr.push({card_id:cid,zone:'special',quantity:1}));
 
