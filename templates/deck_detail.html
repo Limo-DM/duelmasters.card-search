@@ -86,7 +86,12 @@ h1{margin:0 0 6px;font-size:1.6em;}
         <span class="fmt-badge fmt-{{ deck.format }}">{{ deck.format|capitalize }}</span>
         &middot; {{ deck.created_at[:10] if deck.created_at else '' }}
         {% if creator_username %}
-        &middot; by <span style="color:#555;">{{ creator_username }}</span>
+        &middot; by
+        {% if is_official %}
+        <span style="color:#1a55d0;font-weight:700;">🏅 {{ creator_username }}</span>
+        {% else %}
+        <span style="color:#555;">{{ creator_username }}</span>
+        {% endif %}
         {% endif %}
     </div>
 
@@ -129,7 +134,7 @@ h1{margin:0 0 6px;font-size:1.6em;}
         {% endif %}
     {% endfor %}
 
-    <div class="deck-layout">
+    <div class="deck-layout" id="deck-capture-area">
         <div class="deck-left">
             <div class="zone-title">Main Deck ({{ main_cards|sum(attribute='quantity') }})</div>
             <div class="card-image-grid">
@@ -239,6 +244,7 @@ h1{margin:0 0 6px;font-size:1.6em;}
 
     <div class="print-actions">
         <button class="btn-print" id="btn-print-deck">🖨 Print Deck</button>
+        <button class="btn-print" id="btn-save-image" style="background:#2b6cff;margin-left:8px;">📷 Save Deck Image</button>
     </div>
 
     <a href="{{ url_for('deck_list') }}" class="back-link">← Back to deck list</a>
@@ -413,6 +419,40 @@ document.getElementById('btn-delete').addEventListener('click', async function()
         if(e.key === 'Escape') closeLightbox();
         if(e.key === 'ArrowLeft' && _idx > 0) showMember(_idx - 1);
         if(e.key === 'ArrowRight' && _idx < _members.length - 1) showMember(_idx + 1);
+    });
+})();
+</script>
+
+<!-- Save Deck Image (html2canvas) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+(function(){
+    const btn = document.getElementById('btn-save-image');
+    if(!btn) return;
+    btn.addEventListener('click', async function(){
+        const target = document.getElementById('deck-capture-area');
+        if(!target){ alert('Could not find deck area.'); return; }
+        btn.textContent = '⏳ Capturing...';
+        btn.disabled = true;
+        try {
+            const canvas = await html2canvas(target, {
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#ffffff',
+                scale: 2,
+                logging: false
+            });
+            const link = document.createElement('a');
+            const deckName = {{ deck.name | tojson }};
+            link.download = (deckName || 'deck') + '.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        } catch(e) {
+            alert('Image capture failed: ' + e.message);
+        } finally {
+            btn.textContent = '📷 Save Deck Image';
+            btn.disabled = false;
+        }
     });
 })();
 </script>

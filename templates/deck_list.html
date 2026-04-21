@@ -335,8 +335,9 @@ h1{text-align:center;margin-bottom:6px;}
                 civTagsHtml += '</div>';
             }
 
+            const isOfficial = !!d.is_official;
             const creatorHtml = creatorName
-                ? '<div class="deck-creator" style="font-size:.72em;color:#aaa;margin-top:3px;">by '+escHtml(creatorName)+'</div>'
+                ? '<div class="deck-creator" style="font-size:.72em;margin-top:3px;'+(isOfficial?'color:#1a55d0;font-weight:700;':'color:#aaa;')+'">'+(isOfficial?'🏅 ':'')+escHtml(creatorName)+'</div>'
                 : '';
 
             a.innerHTML = coverHtml +

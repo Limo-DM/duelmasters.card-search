@@ -212,11 +212,16 @@ def admin_required(func):
         return func(*args, **kwargs)
     return decorated_view
 
+# Special user_id used for admin-created decks
+ADMIN_USER_ID = '__admin__'
+ADMIN_DISPLAY_NAME = 'official deck'
+
 # ユーザー認証デコレーター（将来のデッキビルダー等に使用）
 def login_required(func):
     @wraps(func)
     def decorated_view(*args, **kwargs):
-        if not session.get('user_id'):
+        # Allow both regular users and admin sessions
+        if not session.get('user_id') and not session.get('admin'):
             flash('Please log in to access this feature.')
             return redirect(url_for('user_login'))
         return func(*args, **kwargs)
@@ -1262,7 +1267,8 @@ def deck_build():
         detail_types = sorted(_dt_set, key=lambda x: x.lower())
     except Exception:
         detail_types = []
-    return render_template('deck_build.html', deck_format=fmt, detail_types=detail_types)
+    is_admin = bool(session.get('admin'))
+    return render_template('deck_build.html', deck_format=fmt, detail_types=detail_types, is_admin=is_admin)
 
 
 @app.route('/api/cards')
@@ -1569,12 +1575,18 @@ def api_deck_save():
     if not data:
         return jsonify({'error': 'invalid data'}), 400
 
-    user_id = session.get('user_id')
+    # Support admin session
+    is_admin = bool(session.get('admin'))
+    user_id = ADMIN_USER_ID if is_admin else session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'not authenticated'}), 401
+
     deck_id = data.get('deck_id')  # 編集時は既存ID
     name = (data.get('name') or 'Deck').strip()
     fmt = data.get('format', 'original')
     description = data.get('description', '')
     cover_card_id = data.get('cover_card_id')
+    cover_image_url = (data.get('cover_image_url') or '').strip() or None  # admin external image
     special_type = data.get('special_type')  # null / 'dormageddon_x' / 'zeron'
     is_public = bool(data.get('is_public', False))
     cards = data.get('cards', [])  # [{card_id, zone, quantity}, ...]
@@ -1589,7 +1601,7 @@ def api_deck_save():
     try:
         if deck_id:
             # 既存デッキの更新
-            supabase.table("decks").update({
+            update_data = {
                 "name": name,
                 "format": fmt,
                 "description": description,
@@ -1597,13 +1609,16 @@ def api_deck_save():
                 "special_type": special_type,
                 "is_public": is_public,
                 "updated_at": "now()",
-            }).eq("id", deck_id).eq("user_id", user_id).execute()
+            }
+            if cover_image_url is not None:
+                update_data["cover_image_url"] = cover_image_url
+            supabase.table("decks").update(update_data).eq("id", deck_id).eq("user_id", user_id).execute()
 
             # 既存カードを削除して再挿入
             supabase.table("deck_cards").delete().eq("deck_id", deck_id).execute()
         else:
             # 新規作成
-            res = supabase.table("decks").insert({
+            insert_data = {
                 "user_id": user_id,
                 "name": name,
                 "format": fmt,
@@ -1611,7 +1626,10 @@ def api_deck_save():
                 "cover_card_id": cover_card_id,
                 "special_type": special_type,
                 "is_public": is_public,
-            }).execute()
+            }
+            if cover_image_url is not None:
+                insert_data["cover_image_url"] = cover_image_url
+            res = supabase.table("decks").insert(insert_data).execute()
             deck_id = res.data[0]["id"]
 
         # カードを挿入
@@ -1928,10 +1946,20 @@ def api_deck_list():
             username_map.update(extra_map)
 
         for d in paginated:
-            d['cover_image_url'] = cover_map.get(d.get('cover_card_id'))
+            # Cover image: use deck's own cover_image_url if set (admin external), else card image
+            deck_cover_img = d.get('cover_image_url') or None
+            if not deck_cover_img:
+                deck_cover_img = cover_map.get(d.get('cover_card_id'))
+            d['cover_image_url'] = deck_cover_img
             d['civilizations'] = deck_civs_map.get(d['id'], [])
-            owner_uname = username_map.get(d.get('user_id'), '')
-            d['creator_username'] = owner_uname if owner_uname else (d.get('user_id') or 'Unknown')
+            deck_owner_id = d.get('user_id')
+            if deck_owner_id == ADMIN_USER_ID:
+                d['creator_username'] = ADMIN_DISPLAY_NAME
+                d['is_official'] = True
+            else:
+                owner_uname = username_map.get(deck_owner_id, '')
+                d['creator_username'] = owner_uname if owner_uname else (deck_owner_id or 'Unknown')
+                d['is_official'] = False
             d['like_count'] = like_counts.get(d['id'], 0)
             d['is_liked'] = d['id'] in user_liked_ids
             d['is_bookmarked'] = d['id'] in user_bookmarked_ids
@@ -1996,8 +2024,11 @@ def deck_detail(deck_id):
 
         # 公開チェック
         user_id = session.get('user_id')
+        is_admin = bool(session.get('admin'))
+        # Admin can view all decks; owners can view their own private decks
         if not deck.get('is_public') and deck.get('user_id') != user_id:
-            abort(403)
+            if not (is_admin and deck.get('user_id') == ADMIN_USER_ID):
+                abort(403)
 
         # デッキ内のカード
         cres = supabase.table("deck_cards").select("*").eq("deck_id", deck_id).execute()
@@ -2041,13 +2072,19 @@ def deck_detail(deck_id):
                     "name": card_info.get("name_en") or card_info.get("name_ja") or str(m["card_id"]),
                 })
 
-        is_owner = (user_id is not None and deck.get('user_id') == user_id)
+        is_owner = (user_id is not None and deck.get('user_id') == user_id) or \
+                   (is_admin and deck.get('user_id') == ADMIN_USER_ID)
 
         # Fetch creator username
         creator_user_id = deck.get('user_id')
-        creator_username = _get_username(creator_user_id) if creator_user_id else ''
-        if not creator_username and creator_user_id:
-            creator_username = creator_user_id  # fallback
+        if creator_user_id == ADMIN_USER_ID:
+            creator_username = ADMIN_DISPLAY_NAME
+            is_official = True
+        else:
+            creator_username = _get_username(creator_user_id) if creator_user_id else ''
+            if not creator_username and creator_user_id:
+                creator_username = creator_user_id  # fallback
+            is_official = False
 
         # Build print list data for the Print Deck button
         # For group cards, expand to all group member images
@@ -2078,6 +2115,7 @@ def deck_detail(deck_id):
         return render_template('deck_detail.html', deck=deck, deck_cards=deck_cards,
                                cards_map=cards_map, is_owner=is_owner,
                                creator_username=creator_username,
+                               is_official=is_official,
                                deck_print_json=deck_print_json,
                                group_detail_map=group_detail_map)
     except Exception as e:
@@ -2088,7 +2126,10 @@ def deck_detail(deck_id):
 @login_required
 def api_deck_load(deck_id):
     """デッキ編集用: デッキデータをセッションストレージ形式で返す"""
-    user_id = session.get('user_id')
+    is_admin = bool(session.get('admin'))
+    user_id = ADMIN_USER_ID if is_admin else session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'not authenticated'}), 401
     try:
         dres = supabase.table("decks").select("*").eq("id", deck_id).eq("user_id", user_id).execute()
         if not dres.data:
@@ -2178,6 +2219,7 @@ def api_deck_load(deck_id):
             'description': deck.get('description', ''),
             'is_public': deck.get('is_public', False),
             'cover_card_id': deck.get('cover_card_id'),
+            'cover_image_url': deck.get('cover_image_url') or '',
         }
 
         return jsonify({'ok': True, 'deck_state': deck_state, 'format': deck.get('format')})
@@ -2190,7 +2232,10 @@ def api_deck_load(deck_id):
 @login_required
 def api_deck_delete(deck_id):
     """デッキ削除 API"""
-    user_id = session.get('user_id')
+    is_admin = bool(session.get('admin'))
+    user_id = ADMIN_USER_ID if is_admin else session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'not authenticated'}), 401
     try:
         # 所有権確認
         dres = supabase.table("decks").select("id").eq("id", deck_id).eq("user_id", user_id).execute()

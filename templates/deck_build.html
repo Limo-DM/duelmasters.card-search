@@ -377,6 +377,11 @@ input[type=number].small-input{width:90px;}
     <input type="text" id="deck-name" value="Deck" maxlength="100">
     <label>Cover Card</label>
     <div class="cover-grid" id="cover-grid"></div>
+    <!-- Admin only: external cover image URL -->
+    <div id="admin-cover-url-row" style="display:none;">
+        <label for="deck-cover-url">Cover Image URL <span style="font-weight:normal;color:#888;">(external, overrides card cover)</span></label>
+        <input type="text" id="deck-cover-url" placeholder="https://..." maxlength="500">
+    </div>
     <label for="deck-desc">Description</label>
     <textarea id="deck-desc" placeholder="Write about this deck..."></textarea>
     <div class="toggle-row">
@@ -393,6 +398,7 @@ input[type=number].small-input{width:90px;}
 <script>
 (function(){
     const FORMAT = '{{ deck_format }}';
+    const IS_ADMIN = {{ 'true' if is_admin else 'false' }};
     const DORMAGEDDON_IDS = [403,404,405,406,407];
     const ZERON_IDS = [398,399,400,401,402];
     const DOKINDAM_ID = 270;
@@ -892,6 +898,14 @@ input[type=number].small-input{width:90px;}
 
     function openSaveModal(){
         saveOverlay.classList.add('open');
+        // Show admin cover URL input if admin
+        const adminUrlRow=document.getElementById('admin-cover-url-row');
+        if(IS_ADMIN){
+            adminUrlRow.style.display='block';
+            document.getElementById('deck-cover-url').value=deck.cover_image_url||'';
+        } else {
+            adminUrlRow.style.display='none';
+        }
         // Pre-fill if editing an existing deck (loaded via /api/deck/<id>/load)
         document.getElementById('deck-name').value=deck.name||'Deck';
         document.getElementById('deck-desc').value=deck.description||'';
@@ -941,14 +955,16 @@ input[type=number].small-input{width:90px;}
         if(deck.special==='dormageddon_x') DORMAGEDDON_IDS.forEach(cid=>cardsArr.push({card_id:cid,zone:'special',quantity:1}));
         else if(deck.special==='zeron') ZERON_IDS.forEach(cid=>cardsArr.push({card_id:cid,zone:'special',quantity:1}));
 
-        const payload={deck_id:deck.deckId||null,name,format:FORMAT,description:desc,cover_card_id:selectedCover,special_type:deck.special,is_public:isPublic,cards:cardsArr};
+        const coverImageUrl=IS_ADMIN?(document.getElementById('deck-cover-url').value.trim()||''):'';
+        const payload={deck_id:deck.deckId||null,name,format:FORMAT,description:desc,cover_card_id:selectedCover,cover_image_url:coverImageUrl,special_type:deck.special,is_public:isPublic,cards:cardsArr};
 
         fetch('/api/deck/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
             .then(r=>r.json())
             .then(data=>{
                 if(data.ok){
                     sessionStorage.removeItem(STORAGE_KEY);
-                    window.location.href='/';
+                    // Admin goes to deck list to see the saved official deck
+                    window.location.href=IS_ADMIN?'/decks':'/';
                 } else { alert('Save failed: '+(data.error||'Unknown error')); }
             }).catch(()=>alert('Network error'));
     }
