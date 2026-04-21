@@ -351,6 +351,7 @@ def index():
             search_query="",
             detail_types=detail_types,
             selected_detail_types=[],
+            is_admin=bool(session.get('admin')),
         )
 
     except Exception as e:
@@ -719,7 +720,7 @@ def search():
             selected_detail_types=selected_detail_types,
             detail_types=detail_types,
             page_items=page_items,
-
+            is_admin=bool(session.get('admin')),
         )
 
     except Exception as e:
@@ -1565,6 +1566,27 @@ def get_card_group_map(card_ids):
         return result
     except Exception:
         return {}
+
+
+@app.route('/api/admin/upload_cover', methods=['POST'])
+@admin_required
+def api_admin_upload_cover():
+    """管理者用 デッキカバー画像アップロード API"""
+    f = request.files.get('image')
+    if not f or not f.filename:
+        return jsonify({'error': 'No file provided'}), 400
+    if not allowed_file(f.filename):
+        return jsonify({'error': 'Invalid file type. Use JPG/PNG.'}), 400
+    # Force .jpg extension when saving
+    ext = f.filename.rsplit('.', 1)[1].lower()
+    if ext not in ('jpg', 'jpeg', 'png'):
+        return jsonify({'error': 'Only JPG or PNG files are accepted.'}), 400
+    save_ext = 'jpg' if ext in ('jpg', 'jpeg') else 'png'
+    filename = 'cover_' + uuid.uuid4().hex + '.' + save_ext
+    save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    f.save(save_path)
+    url = '/uploads/' + filename
+    return jsonify({'ok': True, 'url': url})
 
 
 @app.route('/api/deck/save', methods=['POST'])

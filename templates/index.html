@@ -668,6 +668,13 @@
             <div class="nav-sep"></div>
             <a href="#" id="nav-profile-btn">Profile</a>
             <a href="{{ url_for('user_logout') }}">Logout</a>
+        {% elif is_admin %}
+            <div class="nav-user" style="color:#1a55d0;font-weight:700;">🔑 管理者</div>
+            <a href="{{ url_for('deck_new') }}">🃏 公式デッキを作成</a>
+            <a href="{{ url_for('deck_list') }}">Browse Decks</a>
+            <a href="{{ url_for('print_page') }}">Card Print</a>
+            <div class="nav-sep"></div>
+            <a href="{{ url_for('admin_dashboard') }}" style="color:#1a55d0;font-weight:700;">⚙️ 管理者ダッシュボード</a>
         {% else %}
             <a href="/">Card Search</a>
             <a href="{{ url_for('deck_list') }}">Browse Decks</a>
