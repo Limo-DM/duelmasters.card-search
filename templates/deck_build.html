@@ -390,7 +390,8 @@ input[type=number].small-input{width:90px;}
             <div id="cover-upload-label" style="font-size:.85em;color:#888;">クリックして画像を選択</div>
             <img id="cover-upload-preview" class="cover-upload-preview" alt="preview">
         </div>
-        <div id="cover-upload-status" style="font-size:.8em;color:#888;margin-bottom:8px;"></div>
+        <div id="cover-upload-status" style="font-size:.8em;color:#888;margin-bottom:4px;"></div>
+        <button type="button" id="btn-remove-cover" style="display:none;padding:4px 12px;border:1px solid #d44;border-radius:6px;background:#fff;color:#d44;font-size:.82em;cursor:pointer;margin-bottom:8px;">× 画像を削除</button>
     </div>
     <label for="deck-desc">Description</label>
     <textarea id="deck-desc" placeholder="Write about this deck..."></textarea>
@@ -938,17 +939,21 @@ input[type=number].small-input{width:90px;}
     document.getElementById('save-confirm').addEventListener('click',doSave);
 
     // Admin cover image file picker: click area → trigger hidden input
+    let coverImageCleared = false;  // track if admin explicitly cleared cover image
     if(IS_ADMIN){
         const uploadArea=document.getElementById('cover-upload-area');
         const fileInput=document.getElementById('deck-cover-file');
+        const btnRemoveCover=document.getElementById('btn-remove-cover');
         if(uploadArea&&fileInput){
             uploadArea.addEventListener('click',()=>fileInput.click());
             fileInput.addEventListener('change',function(){
                 const file=this.files[0];
                 if(!file) return;
+                coverImageCleared = false;  // new file selected, not cleared
                 const preview=document.getElementById('cover-upload-preview');
                 const label=document.getElementById('cover-upload-label');
                 const status=document.getElementById('cover-upload-status');
+                if(btnRemoveCover) btnRemoveCover.style.display='inline-block';
                 const reader=new FileReader();
                 reader.onload=e=>{
                     preview.src=e.target.result;
@@ -960,6 +965,21 @@ input[type=number].small-input{width:90px;}
                 status.style.color='#2a9d2a';
             });
         }
+        // Remove cover image button
+        if(btnRemoveCover){
+            btnRemoveCover.addEventListener('click',function(){
+                coverImageCleared = true;
+                const fileInput2=document.getElementById('deck-cover-file');
+                if(fileInput2) fileInput2.value='';  // clear file selection
+                const preview=document.getElementById('cover-upload-preview');
+                const label=document.getElementById('cover-upload-label');
+                const status=document.getElementById('cover-upload-status');
+                if(preview){ preview.src=''; preview.style.display='none'; }
+                if(label) label.textContent='クリックして画像を選択';
+                if(status){ status.textContent='画像を削除します'; status.style.color='#d44'; }
+                btnRemoveCover.style.display='none';
+            });
+        }
     }
 
     function openSaveModal(){
@@ -968,16 +988,21 @@ input[type=number].small-input{width:90px;}
         const adminUploadRow=document.getElementById('admin-cover-upload-row');
         if(IS_ADMIN){
             adminUploadRow.style.display='block';
+            coverImageCleared = false;  // reset clear flag each time modal opens
+            const btnRemoveCoverModal = document.getElementById('btn-remove-cover');
             // If editing a deck with an existing cover image, show preview
             if(deck.cover_image_url){
                 const prev=document.getElementById('cover-upload-preview');
                 prev.src=deck.cover_image_url;prev.style.display='block';
                 document.getElementById('cover-upload-label').textContent='変更する場合はクリック';
-                document.getElementById('cover-upload-status').textContent='現在の画像: '+deck.cover_image_url;
+                document.getElementById('cover-upload-status').textContent='';
+                document.getElementById('cover-upload-status').style.color='#888';
+                if(btnRemoveCoverModal) btnRemoveCoverModal.style.display='inline-block';
             } else {
                 document.getElementById('cover-upload-preview').style.display='none';
                 document.getElementById('cover-upload-label').textContent='クリックして画像を選択';
                 document.getElementById('cover-upload-status').textContent='';
+                if(btnRemoveCoverModal) btnRemoveCoverModal.style.display='none';
             }
         } else {
             adminUploadRow.style.display='none';
@@ -1033,9 +1058,10 @@ input[type=number].small-input{width:90px;}
 
         // Admin: upload cover image first if a new file was selected
         async function getCoverImageUrl(){
-            if(!IS_ADMIN) return '';
+            if(!IS_ADMIN) return null;  // non-admin: don't touch cover_image_url
             const fileInput=document.getElementById('deck-cover-file');
             if(fileInput && fileInput.files && fileInput.files[0]){
+                // New file selected: upload it
                 const fd=new FormData();
                 fd.append('image', fileInput.files[0]);
                 const r=await fetch('/api/admin/upload_cover',{method:'POST',body:fd});
@@ -1043,14 +1069,19 @@ input[type=number].small-input{width:90px;}
                 if(!d.ok) throw new Error(d.error||'Upload failed');
                 return d.url;
             }
-            // No new file: keep existing cover_image_url (from loaded deck)
+            if(coverImageCleared){
+                return '';  // explicitly cleared → server will set NULL
+            }
+            // No change: keep existing cover_image_url (from loaded deck)
             return deck.cover_image_url||'';
         }
 
         const btn=document.getElementById('save-confirm');
         btn.disabled=true;btn.textContent='Saving...';
         getCoverImageUrl().then(coverImageUrl=>{
-            const payload={deck_id:deck.deckId||null,name,format:FORMAT,description:desc,cover_card_id:selectedCover,cover_image_url:coverImageUrl,special_type:deck.special,is_public:isPublic,cards:cardsArr};
+            // Build payload; omit cover_image_url entirely for non-admin (null = not provided)
+            const payload={deck_id:deck.deckId||null,name,format:FORMAT,description:desc,cover_card_id:selectedCover,special_type:deck.special,is_public:isPublic,cards:cardsArr};
+            if(coverImageUrl !== null) payload.cover_image_url = coverImageUrl;
             return fetch('/api/deck/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
         }).then(r=>r.json())
         .then(data=>{

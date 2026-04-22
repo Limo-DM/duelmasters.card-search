@@ -1609,7 +1609,12 @@ def api_deck_save():
     fmt = data.get('format', 'original')
     description = data.get('description', '')
     cover_card_id = data.get('cover_card_id')
-    cover_image_url = (data.get('cover_image_url') or '').strip() or None  # admin external image
+    # cover_image_url: empty string → NULL (clear), URL → set URL, absent (None) → don't touch
+    _cover_raw = data.get('cover_image_url')
+    cover_image_url_provided = _cover_raw is not None  # was it explicitly sent in payload?
+    cover_image_url = _cover_raw.strip() if isinstance(_cover_raw, str) else None
+    if cover_image_url == '':
+        cover_image_url = None  # empty string = clear (NULL in DB)
     special_type = data.get('special_type')  # null / 'dormageddon_x' / 'zeron'
     is_public = bool(data.get('is_public', False))
     cards = data.get('cards', [])  # [{card_id, zone, quantity}, ...]
@@ -1631,9 +1636,10 @@ def api_deck_save():
                 "cover_card_id": cover_card_id,
                 "special_type": special_type,
                 "is_public": is_public,
-                "updated_at": "now()",
             }
-            if cover_image_url is not None:
+            # Always update cover_image_url when explicitly provided in payload
+            # (None = clear/NULL, URL string = set, not-provided = keep existing)
+            if cover_image_url_provided:
                 update_data["cover_image_url"] = cover_image_url
             q = supabase.table("decks").update(update_data).eq("id", deck_id)
             if is_admin:
@@ -1656,7 +1662,7 @@ def api_deck_save():
                 "special_type": special_type,
                 "is_public": is_public,
             }
-            if cover_image_url is not None:
+            if cover_image_url_provided and cover_image_url is not None:
                 insert_data["cover_image_url"] = cover_image_url
             res = supabase.table("decks").insert(insert_data).execute()
             deck_id = res.data[0]["id"]
@@ -1730,6 +1736,7 @@ def api_deck_list():
     sort_by = request.args.get('sort_by', 'newest')  # 'newest' or 'likes'
     filter_liked = request.args.get('filter_liked', '0') == '1'
     filter_bookmarked = request.args.get('filter_bookmarked', '0') == '1'
+    filter_official = request.args.get('filter_official', '0') == '1'
     # Search target flags (default: name and description checked)
     st_name = request.args.get('st_name', '1') != '0'
     st_desc = request.args.get('st_desc', '1') != '0'
@@ -1922,6 +1929,8 @@ def api_deck_list():
             all_decks = [d for d in all_decks if d['id'] in user_liked_ids]
         if filter_bookmarked and current_user_id:
             all_decks = [d for d in all_decks if d['id'] in user_bookmarked_ids]
+        if filter_official:
+            all_decks = [d for d in all_decks if d.get('is_official')]
 
         # Fetch like counts for all remaining decks
         like_counts = {}
@@ -2104,6 +2113,17 @@ def deck_detail(deck_id):
                     "image_url2": card_info.get("image_url2") or None,
                     "name": card_info.get("name_en") or card_info.get("name_ja") or str(m["card_id"]),
                 })
+
+        # Sort main deck cards by cost ascending (None/non-int last)
+        def _main_cost_key(dc):
+            if dc.get('zone') != 'main':
+                return (1, 0)  # non-main zone: after main, stable order
+            cost = cards_map.get(dc['card_id'], {}).get('cost')
+            try:
+                return (0, int(cost)) if cost is not None else (0, float('inf'))
+            except (ValueError, TypeError):
+                return (0, float('inf'))
+        deck_cards.sort(key=_main_cost_key)
 
         is_owner = (user_id is not None and deck.get('user_id') == user_id) or \
                    (is_admin and deck_is_official)

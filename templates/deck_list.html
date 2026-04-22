@@ -217,6 +217,7 @@ h1{text-align:center;margin-bottom:6px;}
             <option value="likes">Most Liked</option>
         </select>
     </label>
+    <label><input type="checkbox" id="filter-official"> 🏅 Official</label>
     {% if current_user.is_authenticated %}
     <label><input type="checkbox" id="filter-liked"> ♡ Liked</label>
     <label><input type="checkbox" id="filter-bookmarked"> 🔖 Bookmarked</label>
@@ -274,8 +275,10 @@ h1{text-align:center;margin-bottom:6px;}
         const sortBy = document.getElementById('sort-select').value;
         const filterLikedEl = document.getElementById('filter-liked');
         const filterBmEl = document.getElementById('filter-bookmarked');
+        const filterOfficialEl = document.getElementById('filter-official');
         const filterLiked = filterLikedEl && filterLikedEl.checked ? '1' : '0';
         const filterBm = filterBmEl && filterBmEl.checked ? '1' : '0';
+        const filterOfficial = filterOfficialEl && filterOfficialEl.checked ? '1' : '0';
 
         let url = '/api/decks?mode='+mode+'&page='+page;
         if(kw) url+='&keyword='+encodeURIComponent(kw);
@@ -294,6 +297,7 @@ h1{text-align:center;margin-bottom:6px;}
         url += '&sort_by=' + sortBy;
         if(filterLiked === '1') url += '&filter_liked=1';
         if(filterBm === '1') url += '&filter_bookmarked=1';
+        if(filterOfficial === '1') url += '&filter_official=1';
 
         fetch(url).then(r=>r.json()).then(render);
     }
@@ -441,6 +445,8 @@ h1{text-align:center;margin-bottom:6px;}
     if(filterLikedEl) filterLikedEl.addEventListener('change', ()=>{ page=1; load(); });
     const filterBmEl = document.getElementById('filter-bookmarked');
     if(filterBmEl) filterBmEl.addEventListener('change', ()=>{ page=1; load(); });
+    const filterOfficialEl2 = document.getElementById('filter-official');
+    if(filterOfficialEl2) filterOfficialEl2.addEventListener('change', ()=>{ page=1; load(); });
 
     load();
 })();
