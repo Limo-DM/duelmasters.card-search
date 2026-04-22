@@ -257,20 +257,22 @@
     }
 
     .reset-btn{
-      display:inline-block;
-      margin-left:12px;
-      padding:8px 14px;
-      border:1px solid #bbb;
-      border-radius:8px;
-      background:#f7f7f7;
-      color:#222;
+      display:inline-flex;
+      align-items:center;
+      margin-left:0;
+      padding:10px 22px;
+      font-size:.88em;
+      border:1.5px solid #bbb;
+      border-radius:10px;
+      background:#fff;
+      color:#555;
       text-decoration:none;
       cursor:pointer;
       font-weight:600;
     }
 
     .reset-btn:hover{
-      background:#eee;
+      background:#f0f0f0;
     }
 
     .action-buttons{
@@ -905,8 +907,8 @@
         <!-- 検索ボタン -->
         <div class="action-buttons">
             <button type="submit" class="search-btn">Search</button>
+            <a href="{{ url_for('search') }}" class="reset-btn" id="reset-btn">Reset</a>
         </div>
-        <a class="reset-btn" href="{{ url_for('search') }}" id="reset-btn">Reset</a>
 
     </form>
 

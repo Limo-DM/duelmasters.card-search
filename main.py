@@ -212,8 +212,8 @@ def admin_required(func):
         return func(*args, **kwargs)
     return decorated_view
 
-# Special user_id used for admin-created decks
-ADMIN_USER_ID = '__admin__'
+# Display name for admin-created (official) decks
+# Official decks have user_id=NULL and is_official=TRUE in the DB
 ADMIN_DISPLAY_NAME = 'official deck'
 
 # ユーザー認証デコレーター（将来のデッキビルダー等に使用）
@@ -1598,9 +1598,10 @@ def api_deck_save():
         return jsonify({'error': 'invalid data'}), 400
 
     # Support admin session
+    # Official/admin decks are stored with user_id=NULL and is_official=TRUE
     is_admin = bool(session.get('admin'))
-    user_id = ADMIN_USER_ID if is_admin else session.get('user_id')
-    if not user_id:
+    user_id = None if is_admin else session.get('user_id')
+    if not is_admin and not user_id:
         return jsonify({'error': 'not authenticated'}), 401
 
     deck_id = data.get('deck_id')  # 編集時は既存ID
@@ -1634,14 +1635,20 @@ def api_deck_save():
             }
             if cover_image_url is not None:
                 update_data["cover_image_url"] = cover_image_url
-            supabase.table("decks").update(update_data).eq("id", deck_id).eq("user_id", user_id).execute()
+            q = supabase.table("decks").update(update_data).eq("id", deck_id)
+            if is_admin:
+                q = q.eq("is_official", True)
+            else:
+                q = q.eq("user_id", user_id)
+            q.execute()
 
             # 既存カードを削除して再挿入
             supabase.table("deck_cards").delete().eq("deck_id", deck_id).execute()
         else:
             # 新規作成
             insert_data = {
-                "user_id": user_id,
+                "user_id": user_id,          # NULL for admin
+                "is_official": is_admin,      # TRUE for admin
                 "name": name,
                 "format": fmt,
                 "description": description,
@@ -1779,9 +1786,14 @@ def api_deck_list():
     try:
         if mode == 'my':
             user_id = session.get('user_id')
-            if not user_id:
+            admin_mode = bool(session.get('admin'))
+            if admin_mode:
+                # Admin sees official decks
+                query = supabase.table("decks").select("*").eq("is_official", True)
+            elif not user_id:
                 return jsonify({"decks": [], "page": 1, "pages": 0, "total": 0})
-            query = supabase.table("decks").select("*").eq("user_id", user_id)
+            else:
+                query = supabase.table("decks").select("*").eq("user_id", user_id)
         else:
             query = supabase.table("decks").select("*").eq("is_public", True)
 
@@ -1975,13 +1987,11 @@ def api_deck_list():
             d['cover_image_url'] = deck_cover_img
             d['civilizations'] = deck_civs_map.get(d['id'], [])
             deck_owner_id = d.get('user_id')
-            if deck_owner_id == ADMIN_USER_ID:
+            if d.get('is_official'):
                 d['creator_username'] = ADMIN_DISPLAY_NAME
-                d['is_official'] = True
             else:
                 owner_uname = username_map.get(deck_owner_id, '')
                 d['creator_username'] = owner_uname if owner_uname else (deck_owner_id or 'Unknown')
-                d['is_official'] = False
             d['like_count'] = like_counts.get(d['id'], 0)
             d['is_liked'] = d['id'] in user_liked_ids
             d['is_bookmarked'] = d['id'] in user_bookmarked_ids
@@ -2047,9 +2057,10 @@ def deck_detail(deck_id):
         # 公開チェック
         user_id = session.get('user_id')
         is_admin = bool(session.get('admin'))
-        # Admin can view all decks; owners can view their own private decks
+        deck_is_official = bool(deck.get('is_official'))
+        # Admin can view their official decks; owners can view their own private decks
         if not deck.get('is_public') and deck.get('user_id') != user_id:
-            if not (is_admin and deck.get('user_id') == ADMIN_USER_ID):
+            if not (is_admin and deck_is_official):
                 abort(403)
 
         # デッキ内のカード
@@ -2095,13 +2106,13 @@ def deck_detail(deck_id):
                 })
 
         is_owner = (user_id is not None and deck.get('user_id') == user_id) or \
-                   (is_admin and deck.get('user_id') == ADMIN_USER_ID)
+                   (is_admin and deck_is_official)
 
         # Fetch creator username
         creator_user_id = deck.get('user_id')
-        if creator_user_id == ADMIN_USER_ID:
+        is_official = deck_is_official
+        if is_official:
             creator_username = ADMIN_DISPLAY_NAME
-            is_official = True
         else:
             creator_username = _get_username(creator_user_id) if creator_user_id else ''
             if not creator_username and creator_user_id:
@@ -2149,11 +2160,16 @@ def deck_detail(deck_id):
 def api_deck_load(deck_id):
     """デッキ編集用: デッキデータをセッションストレージ形式で返す"""
     is_admin = bool(session.get('admin'))
-    user_id = ADMIN_USER_ID if is_admin else session.get('user_id')
-    if not user_id:
+    user_id = session.get('user_id')
+    if not is_admin and not user_id:
         return jsonify({'error': 'not authenticated'}), 401
     try:
-        dres = supabase.table("decks").select("*").eq("id", deck_id).eq("user_id", user_id).execute()
+        q = supabase.table("decks").select("*").eq("id", deck_id)
+        if is_admin:
+            q = q.eq("is_official", True)
+        else:
+            q = q.eq("user_id", user_id)
+        dres = q.execute()
         if not dres.data:
             return jsonify({'error': 'Not found or not authorized'}), 404
         deck = dres.data[0]
@@ -2255,16 +2271,26 @@ def api_deck_load(deck_id):
 def api_deck_delete(deck_id):
     """デッキ削除 API"""
     is_admin = bool(session.get('admin'))
-    user_id = ADMIN_USER_ID if is_admin else session.get('user_id')
-    if not user_id:
+    user_id = session.get('user_id')
+    if not is_admin and not user_id:
         return jsonify({'error': 'not authenticated'}), 401
     try:
         # 所有権確認
-        dres = supabase.table("decks").select("id").eq("id", deck_id).eq("user_id", user_id).execute()
+        q = supabase.table("decks").select("id").eq("id", deck_id)
+        if is_admin:
+            q = q.eq("is_official", True)
+        else:
+            q = q.eq("user_id", user_id)
+        dres = q.execute()
         if not dres.data:
             return jsonify({'error': 'Not found or not authorized'}), 404
         # deck_cards は ON DELETE CASCADE で自動削除される
-        supabase.table("decks").delete().eq("id", deck_id).eq("user_id", user_id).execute()
+        dq = supabase.table("decks").delete().eq("id", deck_id)
+        if is_admin:
+            dq = dq.eq("is_official", True)
+        else:
+            dq = dq.eq("user_id", user_id)
+        dq.execute()
         return jsonify({'ok': True})
     except Exception as e:
         app.logger.warning("api_deck_delete error: %s", e)

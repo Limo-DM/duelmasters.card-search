@@ -132,7 +132,7 @@ input[type=number].small-input{width:90px;}
 /* === Save modal === */
 .save-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:2000;align-items:center;justify-content:center;}
 .save-overlay.open{display:flex;}
-.save-modal{background:#fff;border-radius:14px;padding:28px 24px;width:400px;max-width:90vw;box-shadow:0 6px 30px rgba(0,0,0,.2);}
+.save-modal{background:#fff;border-radius:14px;padding:28px 24px;width:400px;max-width:90vw;max-height:90vh;overflow-y:auto;box-shadow:0 6px 30px rgba(0,0,0,.2);}
 .save-modal h2{margin:0 0 16px;font-size:1.2em;}
 .save-modal label{display:block;font-size:.85em;font-weight:700;color:#444;margin-bottom:4px;}
 .save-modal input[type=text],.save-modal textarea{width:100%;padding:8px 10px;border:1px solid #ccc;border-radius:8px;font-size:.9em;margin-bottom:12px;box-sizing:border-box;}
@@ -346,6 +346,7 @@ input[type=number].small-input{width:90px;}
 
     <div class="action-buttons">
         <button type="button" class="search-btn" id="do-search">Search</button>
+        <button type="button" id="do-reset" style="padding:8px 22px;font-size:.88em;border:1.5px solid #bbb;border-radius:10px;background:#fff;color:#555;font-weight:600;cursor:pointer;">Reset</button>
     </div>
 </div>
 
@@ -701,6 +702,37 @@ input[type=number].small-input{width:90px;}
     function doSearch(){ fetchCards(1); }
     document.getElementById('do-search').addEventListener('click',doSearch);
     document.getElementById('search-input').addEventListener('keydown',(e)=>{ if(e.key==='Enter'){e.preventDefault();doSearch();} });
+
+    // Reset: clear all search conditions and re-search
+    document.getElementById('do-reset').addEventListener('click',function(){
+        document.getElementById('search-input').value='';
+        document.getElementById('st-name').checked=true;
+        document.getElementById('st-text').checked=false;
+        document.getElementById('tribe-input').value='';
+        document.getElementById('cost-min').value='';
+        document.getElementById('cost-max').value='';
+        const powerMin=document.getElementById('power-min');if(powerMin)powerMin.value='';
+        const powerMax=document.getElementById('power-max');if(powerMax)powerMax.value='';
+        const hofOnly=document.getElementById('hof-only');if(hofOnly)hofOnly.checked=false;
+        // Clear civilization selection
+        civSelected.clear();
+        document.querySelectorAll('.civilization-icon').forEach(i=>i.classList.remove('selected'));
+        // Reset color mode
+        colorMode='all';
+        document.querySelectorAll('.color-mode-icon').forEach(i=>i.classList.remove('selected'));
+        // Reset civ mode to OR
+        const orRadio=document.querySelector('input[name="civ-mode"][value="or"]');if(orRadio)orRadio.checked=true;
+        // Clear card types
+        ctSelected.clear();
+        document.querySelectorAll('.ct-item input[type=checkbox]').forEach(cb=>cb.checked=false);
+        ctDetailSelected.clear();
+        document.querySelectorAll('.ct-detail-item input[type=checkbox]').forEach(cb=>cb.checked=false);
+        // Collapse detail panel
+        const detailDiv=document.getElementById('detail-conditions');
+        const detailArrow=document.getElementById('detail-toggle-arrow');
+        if(detailDiv){detailDiv.hidden=true;if(detailArrow)detailArrow.textContent='▼';}
+        fetchCards(1);
+    });
 
     // ===== RENDER CARD GRID =====
     let loadedCards={};
